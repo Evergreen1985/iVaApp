@@ -39,3 +39,11 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Claude Code
+.claude/scheduled_tasks.lock
+
+# Local archives / inspection dirs
+IVAStmp-archive/
+IVAStmp-inspect/
+IVAStmp-inspect2/
