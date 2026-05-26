@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, EDU_API } from "../../../src/lib/constants";
 import { useSession } from "../../../src/store/session";
 import { supabase } from "../../../src/lib/supabase";
+import { useRealtime } from "../../../src/lib/realtime";
 
 const { width: SW } = Dimensions.get("window");
 const CELL = (SW - 4) / 3;
@@ -113,6 +114,7 @@ export default function ParentReels() {
   }, [generating]);
 
   useEffect(() => { loadPhotos(); }, []);
+  useRealtime("section_photos", loadPhotos);
 
   const loadPhotos = async () => {
     setPhotoLoad(true);

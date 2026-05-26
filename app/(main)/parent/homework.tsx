@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { COLORS } from "../../../src/lib/constants";
 import { getParentDashboard } from "../../../src/lib/api";
 import { useSession } from "../../../src/store/session";
+import { useRealtime } from "../../../src/lib/realtime";
 
 export default function ParentHomework() {
   const { t } = useTranslation();
@@ -28,6 +29,7 @@ export default function ParentHomework() {
   };
 
   useEffect(() => { load(); }, []);
+  useRealtime("homework", () => load());
 
   // Filter to active child's section only
   const items = activeChild?.section_id

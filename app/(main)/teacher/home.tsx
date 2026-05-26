@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../src/lib/constants";
 import { getTeacherDashboard } from "../../../src/lib/api";
 import { useSession } from "../../../src/store/session";
+import { useRealtime } from "../../../src/lib/realtime";
 
 export default function TeacherHome() {
   const router = useRouter();
@@ -28,6 +29,9 @@ export default function TeacherHome() {
   };
 
   useEffect(() => { load(); }, []);
+  useRealtime("attendance", () => load());
+  useRealtime("homework",   () => load());
+  useRealtime("enquiries",  () => load());
 
   const handleLogout = () => {
     Alert.alert("Logout", "Are you sure you want to log out?", [

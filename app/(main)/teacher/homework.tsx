@@ -8,6 +8,7 @@ import { COLORS } from "../../../src/lib/constants";
 import { getHomework } from "../../../src/lib/api";
 import { EDU_API } from "../../../src/lib/constants";
 import { useSession } from "../../../src/store/session";
+import { useRealtime } from "../../../src/lib/realtime";
 
 const SUBJECTS = ["English", "Hindi", "Maths", "Science", "EVS", "Drawing", "GK", "Other"];
 
@@ -38,6 +39,7 @@ export default function TeacherHomework() {
   };
 
   useEffect(() => { load(); }, []);
+  useRealtime("homework", () => load());
 
   const handleSubmit = async () => {
     if (!title.trim()) { Alert.alert("Enter a title"); return; }

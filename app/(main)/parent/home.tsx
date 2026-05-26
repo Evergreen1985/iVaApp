@@ -12,6 +12,7 @@ import { supabase } from "../../../src/lib/supabase";
 import { getParentDashboard, getAudioOverviews } from "../../../src/lib/api";
 import { registerPushToken } from "../../../src/lib/notifications";
 import { useSession } from "../../../src/store/session";
+import { useRealtime } from "../../../src/lib/realtime";
 
 const ALL_ACTIVITIES = [
   { label: "Homework",    icon: "book-outline",            route: "/(main)/parent/homework",  color: COLORS.edu },
@@ -82,6 +83,11 @@ export default function ParentHome() {
     if (session?.phone) registerPushToken(session.phone);
     return () => { stopSound(); };
   }, []);
+
+  // Real-time sync: reload whenever admin/teacher changes these tables
+  useRealtime("announcements", () => load());
+  useRealtime("homework",      () => load());
+  useRealtime("attendance",    () => load());
 
   // When language changes after mount: stop audio + re-fetch in new language
   useEffect(() => {
