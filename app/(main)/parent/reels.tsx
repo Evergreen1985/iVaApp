@@ -10,7 +10,6 @@ import { Video, ResizeMode } from "expo-av";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, EDU_API } from "../../../src/lib/constants";
 import { useSession } from "../../../src/store/session";
-import { getParentDashboard } from "../../../src/lib/api";
 
 const { width: SW } = Dimensions.get("window");
 const CELL = (SW - 4) / 3;
@@ -117,10 +116,13 @@ export default function ParentReels() {
   const loadPhotos = async () => {
     setPhotoLoad(true);
     try {
-      if (session?.phone) {
-        const data = await getParentDashboard(session.phone);
-        setPhotos(Array.isArray(data?.photos) ? data.photos : []);
-      }
+      const phone = session?.phone;
+      const url   = phone
+        ? `${EDU_API}/api/reels/photos?phone=${encodeURIComponent(phone)}`
+        : `${EDU_API}/api/reels/photos`;
+      const res  = await fetch(url);
+      const data = await res.json();
+      setPhotos(Array.isArray(data?.photos) ? data.photos : []);
     } catch {}
     setPhotoLoad(false);
   };
