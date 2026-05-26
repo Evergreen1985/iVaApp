@@ -112,34 +112,17 @@ export default function ParentReels() {
     }
   }, [generating]);
 
-  useEffect(() => { loadPhotos(); }, [session?.phone]);
+  useEffect(() => { loadPhotos(); }, []);
 
   const loadPhotos = async () => {
     setPhotoLoad(true);
     try {
-      const phone = session?.phone?.trim();
-      let sectionIds: string[] = [];
-
-      if (phone) {
-        const { data: enquiries } = await supabase
-          .from("enquiries")
-          .select("section_id")
-          .eq("phone", phone);
-        sectionIds = (enquiries || [])
-          .map((e: any) => e.section_id)
-          .filter(Boolean);
-      }
-
-      let q = supabase
+      // Show all school photos — teachers upload for the whole school
+      const { data: photos } = await supabase
         .from("section_photos")
         .select("id, photo_url, title, section_name, uploaded_at")
         .order("uploaded_at", { ascending: false })
         .limit(60);
-
-      if (sectionIds.length > 0) q = q.in("section_id", sectionIds);
-      // if no sections found, return all school photos so no parent ever sees empty
-
-      const { data: photos } = await q;
       setPhotos(photos || []);
     } catch {}
     setPhotoLoad(false);
