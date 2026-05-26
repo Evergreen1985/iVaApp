@@ -3,3 +3,8 @@ dist/
 node_modules/
 IVAStmp*/
 .claude/
+android/build/
+android/.gradle/
+android/app/build/
+android/app/.cxx/
+*.keystore
