@@ -191,8 +191,14 @@ export async function savePickupAuth(payload: object) {
   return res.json();
 }
 
-export async function getAudioOverviews() {
-  const res = await fetch(`${EDU_API}/api/audio/overviews`);
+export async function getAudioOverviews(_token?: string, lang?: string) {
+  // Query Supabase directly so the language filter works without a web-app redeploy
+  const { SUPABASE_URL, SUPABASE_ANON } = await import("./constants");
+  let url = `${SUPABASE_URL}/rest/v1/audio_overviews?select=id,title,audio_url,status,duration_seconds,source_type,language,created_at&status=eq.ready&order=created_at.desc&limit=50`;
+  if (lang) url += `&language=eq.${lang}`;
+  const res = await fetch(url, {
+    headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+  });
   return res.json();
 }
 
@@ -293,6 +299,468 @@ export async function updateKitItem(payload: object) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin Auth ─────────────────────────────────────────────────────────────────
+export async function adminLogin(username: string, password: string) {
+  const res = await fetch(`${EDU_API}/api/admin/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  return res.json();
+}
+
+// ── Admin helpers ──────────────────────────────────────────────────────────────
+function adminHeaders(token: string) {
+  return { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+}
+
+// ── Admin: Enquiries ───────────────────────────────────────────────────────────
+export async function getEnquiries(token: string, status?: string) {
+  const q = status ? `?status=${status}` : "";
+  const res = await fetch(`${EDU_API}/api/admin/enquiries${q}`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function updateEnquiryStatus(token: string, id: string, status: string, notes?: string) {
+  const res = await fetch(`${EDU_API}/api/enquiries/update`, {
+    method: "PATCH",
+    headers: adminHeaders(token),
+    body: JSON.stringify({ id, status, notes }),
+  });
+  return res.json();
+}
+export async function createEnquiry(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/enquiry`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Sections ────────────────────────────────────────────────────────────
+export async function getAdminSections(token: string) {
+  const res = await fetch(`${EDU_API}/api/admin/sections`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createSection(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/admin/sections`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Calendar ────────────────────────────────────────────────────────────
+export async function getAdminCalendar(token: string, month: string) {
+  const res = await fetch(`${EDU_API}/api/admin/calendar?month=${month}`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createCalendarEvent(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/admin/calendar`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+export async function deleteCalendarEvent(token: string, id: string) {
+  const res = await fetch(`${EDU_API}/api/admin/calendar?id=${id}`, {
+    method: "DELETE",
+    headers: adminHeaders(token),
+  });
+  return res.json();
+}
+
+// ── Admin: Announcements ───────────────────────────────────────────────────────
+export async function getAnnouncements(token: string) {
+  const res = await fetch(`${EDU_API}/api/admin/announcements`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createAnnouncement(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/admin/announcements`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+export async function deleteAnnouncement(token: string, id: string) {
+  const res = await fetch(`${EDU_API}/api/admin/announcements?id=${id}`, {
+    method: "DELETE",
+    headers: adminHeaders(token),
+  });
+  return res.json();
+}
+
+// ── Admin: Fees ────────────────────────────────────────────────────────────────
+export async function getFeeStructures(token: string) {
+  const res = await fetch(`${EDU_API}/api/fees/structures`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function getFeeAssignments(token: string, status?: string) {
+  const q = status ? `?status=${status}` : "";
+  const res = await fetch(`${EDU_API}/api/fees/assignments${q}`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function recordPayment(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/fees/record-payment`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+export async function getFeeReports(token: string) {
+  const res = await fetch(`${EDU_API}/api/fees/reports`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function sendFeeReminder(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/fees/reminder`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Staff ───────────────────────────────────────────────────────────────
+export async function getStaff(token: string) {
+  const res = await fetch(`${EDU_API}/api/staff`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createStaff(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/staff`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Expenses ────────────────────────────────────────────────────────────
+export async function getExpenses(token: string) {
+  const res = await fetch(`${EDU_API}/api/expenses`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createExpense(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/expenses`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Reports ─────────────────────────────────────────────────────────────
+export async function getAdminReports(token: string, type: string) {
+  const res = await fetch(`${EDU_API}/api/fees/reports?type=${type}`, { headers: adminHeaders(token) });
+  return res.json();
+}
+
+// ── Admin: Transport ───────────────────────────────────────────────────────────
+export async function getAdminTransport(token: string) {
+  const res = await fetch(`${EDU_API}/api/transport`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createRoute(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/transport`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Medical (all students) ─────────────────────────────────────────────
+export async function getAllMedical(token: string) {
+  const res = await fetch(`${EDU_API}/api/medical?all=true`, { headers: adminHeaders(token) });
+  return res.json();
+}
+
+// ── Admin: Pickup Auth (all) ───────────────────────────────────────────────────
+export async function getAllPickup(token: string) {
+  const res = await fetch(`${EDU_API}/api/pickup?all=true`, { headers: adminHeaders(token) });
+  return res.json();
+}
+
+// ── Admin: Payroll ─────────────────────────────────────────────────────────────
+export async function getPayroll(token: string) {
+  const res = await fetch(`${EDU_API}/api/payroll`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createPayroll(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/payroll`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: PTM ─────────────────────────────────────────────────────────────────
+export async function getAdminPTM(token: string) {
+  const res = await fetch(`${EDU_API}/api/ptm?all=true`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createPTMSlot(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/ptm`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Blog ────────────────────────────────────────────────────────────────
+export async function getBlogPosts(token: string) {
+  const res = await fetch(`${EDU_API}/api/blog`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createBlogPost(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/blog`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Referrals ───────────────────────────────────────────────────────────
+export async function getAdminReferrals(token: string) {
+  const res = await fetch(`${EDU_API}/api/referrals?all=true`, { headers: adminHeaders(token) });
+  return res.json();
+}
+
+// ── Admin: Follow-ups ──────────────────────────────────────────────────────────
+export async function getFollowUps(token: string) {
+  const res = await fetch(`${EDU_API}/api/followups`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createFollowUp(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/followups`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Birthdays ───────────────────────────────────────────────────────────
+export async function getAdminBirthdays(token: string) {
+  const res = await fetch(`${EDU_API}/api/birthdays?days=60`, { headers: adminHeaders(token) });
+  return res.json();
+}
+
+// ── Admin: Testimonials ────────────────────────────────────────────────────────
+export async function getTestimonials(token: string) {
+  const res = await fetch(`${EDU_API}/api/testimonials`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function updateTestimonial(token: string, id: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/testimonials?id=${id}`, {
+    method: "PATCH",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Incidents ───────────────────────────────────────────────────────────
+export async function getAdminIncidents(token: string) {
+  const res = await fetch(`${EDU_API}/api/incidents?all=true`, { headers: adminHeaders(token) });
+  return res.json();
+}
+
+// ── Admin: Knowledge Base ──────────────────────────────────────────────────────
+export async function getKBDocuments(token: string) {
+  const res = await fetch(`${EDU_API}/api/kb/documents`, { headers: adminHeaders(token) });
+  return res.json();
+}
+
+// ── Admin: Photos ──────────────────────────────────────────────────────────────
+export async function getAdminPhotos(token: string) {
+  const res = await fetch(`${EDU_API}/api/photos`, { headers: adminHeaders(token) });
+  return res.json();
+}
+
+// ── Admin: Audio Overviews ─────────────────────────────────────────────────────
+export async function generateAllAudio(token: string, title: string, content: string, voice = "Aoede") {
+  const res = await fetch(`${EDU_API}/api/audio/generate-all`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify({ title, content, voice }),
+  });
+  return res.json();
+}
+export async function deleteAudioOverview(token: string, id: string) {
+  const res = await fetch(`${EDU_API}/api/audio/overviews`, {
+    method: "DELETE",
+    headers: adminHeaders(token),
+    body: JSON.stringify({ id }),
+  });
+  return res.json();
+}
+
+// ── Admin: Kit ─────────────────────────────────────────────────────────────────
+export async function getAdminKit(token: string) {
+  const res = await fetch(`${EDU_API}/api/kit?all=true`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function createKitItem(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/kit`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Admin: Settings ────────────────────────────────────────────────────────────
+export async function getAdminSettings(token: string) {
+  const res = await fetch(`${EDU_API}/api/config`, { headers: adminHeaders(token) });
+  return res.json();
+}
+export async function updateAdminSettings(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/config`, {
+    method: "POST",
+    headers: adminHeaders(token),
+    body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Owner Auth ─────────────────────────────────────────────────────────────
+export async function ownerLogin(username: string, password: string) {
+  const res = await fetch(`${EDU_API}/api/owner/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  return res.json();
+}
+
+function ownerHeaders(token: string) {
+  return { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
+}
+
+// ── Owner: Dashboard ───────────────────────────────────────────────────────
+export async function getOwnerDashboard(token: string) {
+  const res = await fetch(`${EDU_API}/api/owner/dashboard`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+
+// ── Owner: Admissions ──────────────────────────────────────────────────────
+export async function getOwnerAdmissions(token: string) {
+  const res = await fetch(`${EDU_API}/api/owner/admissions`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+
+// ── Owner: Fees ────────────────────────────────────────────────────────────
+export async function getOwnerFees(token: string) {
+  const res = await fetch(`${EDU_API}/api/owner/fees`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+
+// ── Owner: Expenses ────────────────────────────────────────────────────────
+export async function getOwnerExpenses(token: string, month?: string) {
+  const q = month ? `?month=${month}` : "";
+  const res = await fetch(`${EDU_API}/api/owner/expenses${q}`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+export async function createOwnerExpense(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/owner/expenses`, {
+    method: "POST", headers: ownerHeaders(token), body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+export async function deleteOwnerExpense(token: string, id: string) {
+  const res = await fetch(`${EDU_API}/api/owner/expenses`, {
+    method: "DELETE", headers: ownerHeaders(token), body: JSON.stringify({ id }),
+  });
+  return res.json();
+}
+
+// ── Owner: Attendance ──────────────────────────────────────────────────────
+export async function getOwnerAttendance(token: string, date?: string) {
+  const q = date ? `?date=${date}` : "";
+  const res = await fetch(`${EDU_API}/api/owner/attendance${q}`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+
+// ── Owner: Staff Attendance ────────────────────────────────────────────────
+export async function getOwnerStaffAttendance(token: string, date?: string) {
+  const q = date ? `?date=${date}` : "";
+  const res = await fetch(`${EDU_API}/api/owner/staff-attendance${q}`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+export async function markStaffAttendance(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/owner/staff-attendance`, {
+    method: "POST", headers: ownerHeaders(token), body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+
+// ── Owner: Staff Login ─────────────────────────────────────────────────────
+export async function getStaffLogins(token: string) {
+  const res = await fetch(`${EDU_API}/api/owner/staff-login`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+export async function createStaffLogin(token: string, staffId: string) {
+  const res = await fetch(`${EDU_API}/api/owner/staff-login`, {
+    method: "POST", headers: ownerHeaders(token), body: JSON.stringify({ staffId }),
+  });
+  return res.json();
+}
+
+// ── Owner: Messages ────────────────────────────────────────────────────────
+export async function getOwnerMessages(token: string) {
+  const res = await fetch(`${EDU_API}/api/owner/messages`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+export async function replyOwnerMessage(token: string, id: string, reply: string) {
+  const res = await fetch(`${EDU_API}/api/owner/messages`, {
+    method: "PATCH", headers: ownerHeaders(token), body: JSON.stringify({ id, reply }),
+  });
+  return res.json();
+}
+
+// ── Owner: Roles ───────────────────────────────────────────────────────────
+export async function getOwnerRoles(token: string) {
+  const res = await fetch(`${EDU_API}/api/owner/roles`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+export async function createOwnerRole(token: string, payload: object) {
+  const res = await fetch(`${EDU_API}/api/owner/roles`, {
+    method: "POST", headers: ownerHeaders(token), body: JSON.stringify(payload),
+  });
+  return res.json();
+}
+export async function deleteOwnerRole(token: string, id: string) {
+  const res = await fetch(`${EDU_API}/api/owner/roles`, {
+    method: "DELETE", headers: ownerHeaders(token), body: JSON.stringify({ id }),
+  });
+  return res.json();
+}
+
+// ── Owner: AI Insights ─────────────────────────────────────────────────────
+export async function getOwnerInsights(token: string) {
+  const res = await fetch(`${EDU_API}/api/owner/ai-insights`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+
+// ── Owner: Cleanup ─────────────────────────────────────────────────────────
+export async function getCleanupData(token: string) {
+  const res = await fetch(`${EDU_API}/api/owner/cleanup`, { headers: ownerHeaders(token) });
+  return res.json();
+}
+export async function executeCleanup(token: string, tables: string[]) {
+  const res = await fetch(`${EDU_API}/api/owner/cleanup`, {
+    method: "POST", headers: ownerHeaders(token), body: JSON.stringify({ tables }),
   });
   return res.json();
 }

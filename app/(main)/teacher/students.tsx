@@ -19,7 +19,8 @@ export default function TeacherStudents() {
     try {
       if (session?.sectionId) {
         const res = await getStudents(session.sectionId);
-        setAll(res?.students || res || []);
+        const students = res?.students ?? res;
+        setAll(Array.isArray(students) ? students : []);
       }
     } catch {}
     if (isRefresh) setRefresh(false); else setLoading(false);

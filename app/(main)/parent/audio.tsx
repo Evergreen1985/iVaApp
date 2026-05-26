@@ -8,9 +8,13 @@ import { useTranslation } from "react-i18next";
 import { Audio } from "expo-av";
 import { COLORS } from "../../../src/lib/constants";
 import { getAudioOverviews } from "../../../src/lib/api";
+import { useSession } from "../../../src/store/session";
+import i18n from "../../../src/i18n";
 
 export default function ParentAudio() {
   const { t } = useTranslation();
+  const { session } = useSession();
+  const token = session?.token || "";
   const [overviews, setOverviews] = useState<any[]>([]);
   const [loading, setLoading]     = useState(true);
   const [refresh, setRefresh]     = useState(false);
@@ -20,8 +24,9 @@ export default function ParentAudio() {
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
     try {
-      const res = await getAudioOverviews();
-      setOverviews(Array.isArray(res) ? res : []);
+      const res = await getAudioOverviews(token, i18n.language);
+      const data = Array.isArray(res) ? res : (res?.overviews ?? res?.audioOverviews ?? []);
+      setOverviews(data.filter((a: any) => a.status === "ready" || !a.status));
     } catch { setOverviews([]); }
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
@@ -40,7 +45,7 @@ export default function ParentAudio() {
       }
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
       const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: item.url || item.audioUrl },
+        { uri: item.audio_url || item.url || item.audioUrl },
         { shouldPlay: true }
       );
       setSound(newSound);

@@ -6,7 +6,7 @@ import {
 import { useRouter } from "expo-router";
 import { useTranslation } from "react-i18next";
 import { COLORS } from "../../src/lib/constants";
-import { parentLogin, parentFirstLogin, sendResetOTP, resetPassword, teacherLogin } from "../../src/lib/api";
+import { parentLogin, parentFirstLogin, sendResetOTP, resetPassword, teacherLogin, adminLogin, ownerLogin } from "../../src/lib/api";
 import { useSession } from "../../src/store/session";
 import LanguageSwitcher from "../../src/components/LanguageSwitcher";
 
@@ -17,7 +17,9 @@ type Mode =
   | "parent_first"
   | "parent_forgot"
   | "parent_otp"
-  | "teacher";
+  | "teacher"
+  | "admin"
+  | "owner";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -125,6 +127,36 @@ export default function LoginScreen() {
     router.replace("/(main)/teacher/home");
   };
 
+  // ── Owner login ─────────────────────────────────────────────────────────
+  const handleOwnerLogin = async () => {
+    if (!user || !pass) { Alert.alert(t("fillAllFields")); return; }
+    setBusy(true);
+    const data = await ownerLogin(user, pass);
+    setBusy(false);
+    if (data.error) { Alert.alert(t("loginFailed"), data.error); return; }
+    await setSession({
+      role: "owner", name: data.name || user,
+      username: user, token: data.token,
+      loginTime: Date.now(),
+    });
+    router.replace("/(owner)/home");
+  };
+
+  // ── Admin login ─────────────────────────────────────────────────────────
+  const handleAdminLogin = async () => {
+    if (!user || !pass) { Alert.alert(t("fillAllFields")); return; }
+    setBusy(true);
+    const data = await adminLogin(user, pass);
+    setBusy(false);
+    if (data.error) { Alert.alert(t("loginFailed"), data.error); return; }
+    await setSession({
+      role: "admin", name: data.name || user,
+      username: user, token: data.token,
+      loginTime: Date.now(),
+    });
+    router.replace("/(admin)/home");
+  };
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
@@ -150,11 +182,25 @@ export default function LoginScreen() {
                 <Text style={s.roleDesc}>{t("parentDesc")}</Text>
               </View>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.roleBtn, { backgroundColor: COLORS.dark }]} onPress={() => setMode("teacher")}>
+            <TouchableOpacity style={[s.roleBtn, { backgroundColor: COLORS.dark }]} onPress={() => { setUser(""); setPass(""); setMode("teacher"); }}>
               <Text style={s.roleIcon}>👩‍🏫</Text>
               <View>
                 <Text style={s.roleName}>{t("teacherStaff")}</Text>
                 <Text style={s.roleDesc}>{t("teacherDesc")}</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.roleBtn, { backgroundColor: COLORS.orange }]} onPress={() => { setUser(""); setPass(""); setMode("admin"); }}>
+              <Text style={s.roleIcon}>🏫</Text>
+              <View>
+                <Text style={s.roleName}>Admin</Text>
+                <Text style={s.roleDesc}>School administrator portal</Text>
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.roleBtn, { backgroundColor: "#7C3AED" }]} onPress={() => { setUser(""); setPass(""); setMode("owner"); }}>
+              <Text style={s.roleIcon}>👑</Text>
+              <View>
+                <Text style={s.roleName}>Owner</Text>
+                <Text style={s.roleDesc}>School owner dashboard</Text>
               </View>
             </TouchableOpacity>
           </View>
@@ -302,6 +348,66 @@ export default function LoginScreen() {
           </View>
         )}
 
+        {/* Admin */}
+        {mode === "admin" && (
+          <View style={s.card}>
+            <TouchableOpacity onPress={() => setMode("choose")} style={s.back}>
+              <Text style={s.backTxt}>{t("back")}</Text>
+            </TouchableOpacity>
+            <Text style={s.title}>Admin Login</Text>
+            <Text style={s.sub}>School administrator credentials</Text>
+            <TextInput
+              style={s.input}
+              placeholder={t("username")}
+              placeholderTextColor={COLORS.mid}
+              autoCapitalize="none"
+              value={user}
+              onChangeText={setUser}
+            />
+            <TextInput
+              style={s.input}
+              placeholder={t("password")}
+              placeholderTextColor={COLORS.mid}
+              secureTextEntry
+              value={pass}
+              onChangeText={setPass}
+            />
+            <TouchableOpacity style={[s.btn, { backgroundColor: COLORS.orange }, busy && s.btnDisabled]} onPress={handleAdminLogin} disabled={busy}>
+              {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.btnTxt}>Login as Admin</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Owner */}
+        {mode === "owner" && (
+          <View style={s.card}>
+            <TouchableOpacity onPress={() => setMode("choose")} style={s.back}>
+              <Text style={s.backTxt}>{t("back")}</Text>
+            </TouchableOpacity>
+            <Text style={s.title}>Owner Login</Text>
+            <Text style={s.sub}>School owner credentials</Text>
+            <TextInput
+              style={s.input}
+              placeholder={t("username")}
+              placeholderTextColor={COLORS.mid}
+              autoCapitalize="none"
+              value={user}
+              onChangeText={setUser}
+            />
+            <TextInput
+              style={s.input}
+              placeholder={t("password")}
+              placeholderTextColor={COLORS.mid}
+              secureTextEntry
+              value={pass}
+              onChangeText={setPass}
+            />
+            <TouchableOpacity style={[s.btn, { backgroundColor: "#7C3AED" }, busy && s.btnDisabled]} onPress={handleOwnerLogin} disabled={busy}>
+              {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.btnTxt}>Login as Owner</Text>}
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Teacher */}
         {mode === "teacher" && (
           <View style={s.card}>
@@ -338,7 +444,7 @@ export default function LoginScreen() {
 }
 
 const s = StyleSheet.create({
-  container:    { flexGrow: 1, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center", padding: 20 },
+  container:    { flexGrow: 1, backgroundColor: COLORS.primary, alignItems: "center", padding: 20, paddingTop: 60, paddingBottom: 40 },
   header:       { alignItems: "center", marginBottom: 32 },
   logo:         { fontSize: 48, fontWeight: "900", color: "#fff", letterSpacing: -1 },
   tagline:      { fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 2 },

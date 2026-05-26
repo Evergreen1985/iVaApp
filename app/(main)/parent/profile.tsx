@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Alert, Modal, Pressable,
+  Alert, Modal, Pressable, Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,12 +13,10 @@ import { LANGUAGES, setLanguage, LangCode } from "../../../src/i18n";
 export default function ParentProfile() {
   const router = useRouter();
   const { t, i18n } = useTranslation();
-  const { session, clearSession } = useSession();
+  const { session, clearSession, activeChild } = useSession();
   const [langOpen, setLangOpen] = useState(false);
   const current = i18n.language as LangCode;
   const currentLang = LANGUAGES.find((l) => l.code === current) ?? LANGUAGES[0];
-
-  const child = session?.children?.[0];
 
   const handleLogout = () => {
     Alert.alert(t("logout"), t("logoutConfirm"), [
@@ -49,29 +47,17 @@ export default function ParentProfile() {
     <ScrollView style={s.root} contentContainerStyle={s.content}>
       {/* Header */}
       <View style={s.header}>
-        <View style={s.avatarCircle}>
-          <Ionicons name="person" size={36} color="#fff" />
-        </View>
-        <Text style={s.name}>{session?.name || t("parent")}</Text>
+        {activeChild?.photo_url ? (
+          <Image source={{ uri: activeChild.photo_url }} style={s.avatarPhoto} />
+        ) : (
+          <View style={s.avatarCircle}>
+            <Ionicons name="person" size={36} color="#fff" />
+          </View>
+        )}
+        <Text style={s.name}>{activeChild?.child_name || activeChild?.name || t("parent")}</Text>
+        {activeChild?.class ? <Text style={s.childrenLine}>{activeChild.class}</Text> : null}
         <Text style={s.phone}>{session?.phone ? `+91 ${session.phone}` : ""}</Text>
       </View>
-
-      {/* Child info */}
-      {child && (
-        <View style={s.childCard}>
-          <View style={s.childAvatar}>
-            <Text style={s.childAvatarTxt}>{(child.name || "?")[0].toUpperCase()}</Text>
-          </View>
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={s.childName}>{child.name}</Text>
-            {child.section && <Text style={s.childInfo}>{child.section}</Text>}
-            {child.program && <Text style={s.childInfo}>{child.program}</Text>}
-          </View>
-          <View style={s.statusBadge}>
-            <Text style={s.statusTxt}>{child.status || t("enrollStatus")}</Text>
-          </View>
-        </View>
-      )}
 
       {/* Settings */}
       <Text style={s.sectionLabel}>{t("profile")}</Text>
@@ -146,16 +132,11 @@ const s = StyleSheet.create({
   root:           { flex: 1, backgroundColor: COLORS.bg },
   content:        { padding: 20, paddingBottom: 50 },
   header:         { backgroundColor: COLORS.edu, borderRadius: 24, padding: 28, alignItems: "center", marginBottom: 20 },
-  avatarCircle:   { width: 72, height: 72, borderRadius: 36, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  avatarCircle:   { width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.25)", alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  avatarPhoto:    { width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: "rgba(255,255,255,0.5)", marginBottom: 12 },
   name:           { fontSize: 20, fontWeight: "800", color: "#fff" },
   phone:          { fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 4 },
-  childCard:      { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 20 },
-  childAvatar:    { width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.edu, alignItems: "center", justifyContent: "center" },
-  childAvatarTxt: { fontSize: 20, fontWeight: "800", color: "#fff" },
-  childName:      { fontSize: 15, fontWeight: "700", color: COLORS.dark },
-  childInfo:      { fontSize: 12, color: COLORS.mid, marginTop: 2 },
-  statusBadge:    { backgroundColor: "#EEF8F6", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5 },
-  statusTxt:      { fontSize: 11, fontWeight: "700", color: COLORS.edu },
+  childrenLine:   { fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 6, fontWeight: "600" },
   sectionLabel:   { fontSize: 11, fontWeight: "700", color: COLORS.mid, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 },
   card:           { backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, overflow: "hidden" },
   row:            { flexDirection: "row", alignItems: "center", padding: 16, gap: 12 },

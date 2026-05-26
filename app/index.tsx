@@ -11,7 +11,10 @@ export default function Index() {
   useEffect(() => {
     if (loading) return;
     if (session) {
-      router.replace(session.role === "teacher" ? "/(main)/teacher/home" : "/(main)/parent/home");
+      if (session.role === "owner") router.replace("/(owner)/home");
+      else if (session.role === "admin") router.replace("/(admin)/home");
+      else if (session.role === "teacher") router.replace("/(main)/teacher/home");
+      else router.replace("/(main)/parent/home");
     } else {
       router.replace("/(auth)/login");
     }

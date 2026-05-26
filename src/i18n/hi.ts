@@ -139,6 +139,9 @@ export default {
   // Audio
   audioOverviews:    "ऑडियो अवलोकन",
   noAudio:           "कोई ऑडियो उपलब्ध नहीं",
+  allActivities:     "सभी गतिविधियाँ",
+  askAgent:          "iVa से पूछें",
+  agentDesc:         "मदद चाहिए? फीस, होमवर्क, इवेंट या स्कूल से जुड़ा कुछ भी पूछें",
   play:              "चलाएं",
   pause:             "रोकें",
 

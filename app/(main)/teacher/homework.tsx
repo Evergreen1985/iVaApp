@@ -30,7 +30,8 @@ export default function TeacherHomework() {
     try {
       if (session?.sectionId) {
         const res = await getHomework(session.sectionId);
-        setList(res?.homework || res || []);
+        const hw = res?.homework ?? res;
+        setList(Array.isArray(hw) ? hw : []);
       }
     } catch {}
     if (isRefresh) setRefresh(false); else setLoading(false);

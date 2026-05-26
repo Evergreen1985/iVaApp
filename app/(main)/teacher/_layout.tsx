@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ColorValue } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { COLORS } from "../../../src/lib/constants";
 
@@ -14,6 +15,7 @@ function icon(name: IconName) {
 
 export default function TeacherLayout() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
@@ -23,8 +25,8 @@ export default function TeacherLayout() {
         tabBarStyle: {
           backgroundColor: "#fff",
           borderTopColor: COLORS.border,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
         },
         tabBarLabelStyle: { fontSize: 10, fontWeight: "600" },
       }}

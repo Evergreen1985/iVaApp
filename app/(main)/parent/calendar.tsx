@@ -22,7 +22,8 @@ export default function ParentCalendar() {
   const load = async () => {
     setLoading(true);
     const res = await getCalendar(monthKey);
-    setEvents(res?.events || res || []);
+    const evts = res?.events ?? res;
+    setEvents(Array.isArray(evts) ? evts : []);
     setLoading(false);
   };
 

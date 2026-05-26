@@ -139,6 +139,9 @@ export default {
   // Audio
   audioOverviews:    "Audio Overviews",
   noAudio:           "No audio overviews available",
+  allActivities:     "All Activities",
+  askAgent:          "Ask iVa",
+  agentDesc:         "Need help? Ask about fees, homework, events or anything school-related",
   play:              "Play",
   pause:             "Pause",
 

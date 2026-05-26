@@ -139,6 +139,9 @@ export default {
   // Audio
   audioOverviews:    "ಆಡಿಯೋ ಅವಲೋಕನಗಳು",
   noAudio:           "ಆಡಿಯೋ ಅವಲೋಕನಗಳು ಲಭ್ಯವಿಲ್ಲ",
+  allActivities:     "ಎಲ್ಲಾ ಚಟುವಟಿಕೆಗಳು",
+  askAgent:          "iVa ಅನ್ನು ಕೇಳಿ",
+  agentDesc:         "ಸಹಾಯ ಬೇಕೇ? ಶುಲ್ಕಗಳು, ಹೋಂವರ್ಕ್, ಕಾರ್ಯಕ್ರಮಗಳ ಬಗ್ಗೆ ಕೇಳಿ",
   play:              "ಪ್ಲೇ ಮಾಡಿ",
   pause:             "ವಿರಾಮ",
 

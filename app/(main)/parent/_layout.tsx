@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { ColorValue } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { COLORS } from "../../../src/lib/constants";
 
@@ -14,6 +15,7 @@ function icon(name: IconName) {
 
 export default function ParentLayout() {
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   return (
     <Tabs
       screenOptions={{
@@ -23,8 +25,8 @@ export default function ParentLayout() {
         tabBarStyle: {
           backgroundColor: "#fff",
           borderTopColor: COLORS.border,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: 8 + insets.bottom,
         },
         tabBarLabelStyle: { fontSize: 10, fontWeight: "600" },
       }}
@@ -34,7 +36,8 @@ export default function ParentLayout() {
       <Tabs.Screen name="fees"     options={{ title: t("fees"),     tabBarIcon: icon("card") }} />
       <Tabs.Screen name="ai"       options={{ title: t("aiTools"),  tabBarIcon: icon("sparkles") }} />
       <Tabs.Screen name="profile"  options={{ title: t("profile"),  tabBarIcon: icon("person-circle") }} />
-      {/* Hidden from tab bar — navigable via profile quick links */}
+      {/* Hidden from tab bar — navigable via home bubble / profile quick links */}
+      <Tabs.Screen name="community"  options={{ href: null }} />
       <Tabs.Screen name="calendar"   options={{ href: null }} />
       <Tabs.Screen name="ask"        options={{ href: null }} />
       <Tabs.Screen name="medical"    options={{ href: null }} />
