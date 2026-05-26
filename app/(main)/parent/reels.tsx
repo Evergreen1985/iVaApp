@@ -10,6 +10,7 @@ import { Video, ResizeMode } from "expo-av";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, EDU_API } from "../../../src/lib/constants";
 import { useSession } from "../../../src/store/session";
+import { supabase } from "../../../src/lib/supabase";
 
 const { width: SW } = Dimensions.get("window");
 const CELL = (SW - 4) / 3;
@@ -116,13 +117,30 @@ export default function ParentReels() {
   const loadPhotos = async () => {
     setPhotoLoad(true);
     try {
-      const phone = session?.phone;
-      const url   = phone
-        ? `${EDU_API}/api/reels/photos?phone=${encodeURIComponent(phone)}`
-        : `${EDU_API}/api/reels/photos`;
-      const res  = await fetch(url);
-      const data = await res.json();
-      setPhotos(Array.isArray(data?.photos) ? data.photos : []);
+      const phone = session?.phone?.trim();
+      let sectionIds: string[] = [];
+
+      if (phone) {
+        const { data: enquiries } = await supabase
+          .from("enquiries")
+          .select("section_id")
+          .eq("phone", phone);
+        sectionIds = (enquiries || [])
+          .map((e: any) => e.section_id)
+          .filter(Boolean);
+      }
+
+      let q = supabase
+        .from("section_photos")
+        .select("id, photo_url, title, section_name, uploaded_at")
+        .order("uploaded_at", { ascending: false })
+        .limit(60);
+
+      if (sectionIds.length > 0) q = q.in("section_id", sectionIds);
+      // if no sections found, return all school photos so no parent ever sees empty
+
+      const { data: photos } = await q;
+      setPhotos(photos || []);
     } catch {}
     setPhotoLoad(false);
   };
