@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, Image, ActivityIndicator,
+  KeyboardAvoidingView, Platform, ActivityIndicator,
   Pressable, BackHandler,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -35,9 +35,9 @@ type Message  = {
   content: string; created_at: string; reactions: Record<string, number>;
 };
 
-export default function CommunityScreen() {
+export default function TeacherCommunity() {
   const insets = useSafeAreaInsets();
-  const { session, activeChild: activeChildFromStore } = useSession();
+  const { session } = useSession();
 
   const [channels, setChannels]           = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
@@ -49,10 +49,8 @@ export default function CommunityScreen() {
   const [listLoading, setListLoading]     = useState(true);
   const [reactingTo, setReactingTo]       = useState<string | null>(null);
 
-  const childPhoto = activeChildFromStore?.photo_url ?? null;
-
-  const subRef  = useRef<any>(null);
-  const listRef = useRef<FlatList>(null);
+  const subRef        = useRef<any>(null);
+  const listRef       = useRef<FlatList>(null);
   const activeChanRef = useRef<Channel | null>(null);
 
   useEffect(() => { activeChanRef.current = activeChannel; }, [activeChannel]);
@@ -101,10 +99,10 @@ export default function CommunityScreen() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             channel_id:   ch.id,
-            user_type:    "parent",
-            user_ref:     session?.phone || "",
-            display_name: session?.name  || "Parent",
-            avatar_emoji: "😊",
+            user_type:    "teacher",
+            user_ref:     session?.name || "",
+            display_name: session?.name || "Teacher",
+            avatar_emoji: "👩‍🏫",
           }),
         }),
         fetch(`${EDU_API}/api/community/messages?channel_id=${ch.id}`),
@@ -117,7 +115,7 @@ export default function CommunityScreen() {
     setChatLoading(false);
 
     const sub = supabase
-      .channel(`chat-${ch.id}`)
+      .channel(`chat-teacher-${ch.id}`)
       .on("postgres_changes", {
         event: "INSERT", schema: "public",
         table: "community_messages", filter: `channel_id=eq.${ch.id}`,
@@ -145,9 +143,9 @@ export default function CommunityScreen() {
         body: JSON.stringify({
           channel_id:   activeChannel.id,
           member_id:    memberId,
-          display_name: session?.name || "Parent",
-          user_type:    "parent",
-          avatar_emoji: "😊",
+          display_name: session?.name || "Teacher",
+          user_type:    "teacher",
+          avatar_emoji: "👩‍🏫",
           content,
           msg_type:     "text",
         }),
@@ -189,12 +187,10 @@ export default function CommunityScreen() {
           style={[s.msgRow, mine && s.msgRowMine]}
         >
           {!mine ? (
-            <View style={s.avt}><Text style={s.avtEmoji}>{msg.avatar_emoji || "😊"}</Text></View>
-          ) : childPhoto ? (
-            <Image source={{ uri: childPhoto }} style={s.avtImg} />
+            <View style={s.avt}><Text style={s.avtEmoji}>{msg.avatar_emoji || "👩‍🏫"}</Text></View>
           ) : (
             <View style={[s.avt, s.avtMine]}>
-              <Text style={s.avtInit}>{(session?.name || "P")[0].toUpperCase()}</Text>
+              <Text style={s.avtInit}>{(session?.name || "T")[0].toUpperCase()}</Text>
             </View>
           )}
           <View style={[s.bubble, mine && s.bubbleMine]}>
@@ -230,14 +226,14 @@ export default function CommunityScreen() {
     return (
       <View style={s.root}>
         <View style={[s.hdr, { paddingTop: insets.top + 14 }]}>
-          <Ionicons name="people" size={22} color={COLORS.edu} />
+          <Ionicons name="people" size={22} color={COLORS.primary} />
           <View style={{ flex: 1 }}>
             <Text style={s.hdrTitle}>Community</Text>
             <Text style={s.hdrSub}>Connect with your school family</Text>
           </View>
         </View>
         {listLoading ? (
-          <View style={s.center}><ActivityIndicator size="large" color={COLORS.edu} /></View>
+          <View style={s.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>
         ) : channels.length === 0 ? (
           <View style={s.center}>
             <Ionicons name="chatbubbles-outline" size={48} color={COLORS.mid} />
@@ -251,7 +247,7 @@ export default function CommunityScreen() {
             renderItem={({ item: ch }) => (
               <TouchableOpacity style={s.chCard} onPress={() => openChannel(ch)} activeOpacity={0.8}>
                 <View style={s.chIconBox}>
-                  <Ionicons name={slugIcon(ch.slug) as any} size={22} color={COLORS.edu} />
+                  <Ionicons name={slugIcon(ch.slug) as any} size={22} color={COLORS.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={s.chName}>{ch.name}</Text>
@@ -282,11 +278,11 @@ export default function CommunityScreen() {
           {!!activeChannel.description && <Text style={s.hdrSub} numberOfLines={1}>{activeChannel.description}</Text>}
         </View>
         <View style={[s.chIconBox, { width: 38, height: 38, borderRadius: 12 }]}>
-          <Ionicons name={slugIcon(activeChannel.slug) as any} size={18} color={COLORS.edu} />
+          <Ionicons name={slugIcon(activeChannel.slug) as any} size={18} color={COLORS.primary} />
         </View>
       </View>
       {chatLoading ? (
-        <View style={s.center}><ActivityIndicator size="large" color={COLORS.edu} /></View>
+        <View style={s.center}><ActivityIndicator size="large" color={COLORS.primary} /></View>
       ) : (
         <FlatList
           ref={listRef}
@@ -332,21 +328,20 @@ const s = StyleSheet.create({
   hdrTitle: { fontSize: 18, fontWeight: "800", color: COLORS.dark },
   hdrSub:   { fontSize: 12, color: COLORS.mid, marginTop: 1 },
   chCard:    { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 16, padding: 14, borderWidth: 1, borderColor: COLORS.border, gap: 12 },
-  chIconBox: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#EEF8F6", alignItems: "center", justifyContent: "center" },
+  chIconBox: { width: 46, height: 46, borderRadius: 14, backgroundColor: "#EEF4FF", alignItems: "center", justifyContent: "center" },
   chName:    { fontSize: 15, fontWeight: "700", color: COLORS.dark },
   chDesc:    { fontSize: 12, color: COLORS.mid, marginTop: 2 },
-  chBadge:   { backgroundColor: COLORS.edu, borderRadius: 12, paddingHorizontal: 7, paddingVertical: 2 },
+  chBadge:   { backgroundColor: COLORS.primary, borderRadius: 12, paddingHorizontal: 7, paddingVertical: 2 },
   chBadgeTxt:{ fontSize: 10, fontWeight: "800", color: "#fff" },
   msgRow:      { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   msgRowMine:  { justifyContent: "flex-end" },
-  avt:         { width: 34, height: 34, borderRadius: 17, backgroundColor: "#EEF8F6", alignItems: "center", justifyContent: "center", flexShrink: 0 },
-  avtMine:     { backgroundColor: "#7C3AED18" },
-  avtImg:      { width: 34, height: 34, borderRadius: 17, flexShrink: 0 },
+  avt:         { width: 34, height: 34, borderRadius: 17, backgroundColor: "#EEF4FF", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  avtMine:     { backgroundColor: COLORS.primary + "22" },
   avtEmoji:    { fontSize: 18 },
-  avtInit:     { fontSize: 14, fontWeight: "700", color: "#7C3AED" },
+  avtInit:     { fontSize: 14, fontWeight: "700", color: COLORS.primary },
   bubble:      { maxWidth: "72%", backgroundColor: "#fff", borderRadius: 18, borderBottomLeftRadius: 4, padding: 10, borderWidth: 1, borderColor: COLORS.border },
-  bubbleMine:  { backgroundColor: COLORS.edu, borderBottomLeftRadius: 18, borderBottomRightRadius: 4, borderColor: "transparent" },
-  senderName:  { fontSize: 11, fontWeight: "700", color: COLORS.edu, marginBottom: 3 },
+  bubbleMine:  { backgroundColor: COLORS.primary, borderBottomLeftRadius: 18, borderBottomRightRadius: 4, borderColor: "transparent" },
+  senderName:  { fontSize: 11, fontWeight: "700", color: COLORS.primary, marginBottom: 3 },
   msgTxt:      { fontSize: 14, color: COLORS.dark, lineHeight: 20 },
   msgTxtMine:  { color: "#fff" },
   msgTime:     { fontSize: 10, color: COLORS.mid, marginTop: 4, alignSelf: "flex-end" },
@@ -362,6 +357,6 @@ const s = StyleSheet.create({
   emptyTxt: { fontSize: 14, color: COLORS.mid, textAlign: "center", lineHeight: 22 },
   composer:    { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingTop: 10, gap: 10, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: COLORS.border },
   compInput:   { flex: 1, backgroundColor: COLORS.bg, borderRadius: 22, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, fontSize: 14, color: COLORS.dark, maxHeight: 100, borderWidth: 1, borderColor: COLORS.border },
-  sendBtn:     { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.edu, alignItems: "center", justifyContent: "center" },
+  sendBtn:     { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.primary, alignItems: "center", justifyContent: "center" },
   sendDisabled:{ backgroundColor: "#C8D0DA" },
 });

@@ -33,10 +33,11 @@ export default function TeacherLayout() {
     >
       <Tabs.Screen name="home"       options={{ title: t("home"),       tabBarIcon: icon("home") }} />
       <Tabs.Screen name="attendance" options={{ title: t("attendance"), tabBarIcon: icon("checkmark-circle") }} />
+      <Tabs.Screen name="ai"         options={{ title: "AI Tools",      tabBarIcon: icon("sparkles") }} />
       <Tabs.Screen name="students"   options={{ title: t("students"),   tabBarIcon: icon("people") }} />
-      <Tabs.Screen name="ai"         options={{ title: t("aiTools"),    tabBarIcon: icon("sparkles") }} />
       <Tabs.Screen name="profile"    options={{ title: t("profile"),    tabBarIcon: icon("person-circle") }} />
-      {/* Hidden from tab bar — navigable via profile quick links */}
+      {/* Hidden from tab bar — navigable via home quick actions */}
+      <Tabs.Screen name="community"  options={{ href: null }} />
       <Tabs.Screen name="homework"   options={{ href: null }} />
       <Tabs.Screen name="messages"   options={{ href: null }} />
       <Tabs.Screen name="birthdays"  options={{ href: null }} />

@@ -66,10 +66,8 @@ export default function ParentHome() {
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
     try {
-      const [dashRes, audioRes] = await Promise.all([
-        session?.phone ? getParentDashboard(session.phone) : Promise.resolve(null),
-        getAudioOverviews(token, lang),
-      ]);
+      const dashRes = session?.phone ? await getParentDashboard(session.phone) : null;
+      const audioRes = await getAudioOverviews(token, lang);
       if (dashRes && !dashRes.error) setData(dashRes);
       const raw = Array.isArray(audioRes) ? audioRes : (audioRes?.overviews ?? audioRes?.audioOverviews ?? []);
       setAudios(raw.filter((a: any) => a.status === "ready" || !a.status));
@@ -208,14 +206,54 @@ export default function ParentHome() {
 
       {/* ── Header ── */}
       <View style={s.header}>
-        <View>
-          <Text style={s.greeting}>{t("hello")}</Text>
-          <Text style={s.name}>{session?.name || t("parent")}</Text>
+        <Text style={s.greeting}>Hello 👋</Text>
+        <View style={s.headerRight}>
+          {children.map((child: any, i: number) => {
+            const active = selectedIdx === i;
+            return (
+              <TouchableOpacity key={i} onPress={() => setSelectedIdx(i)} activeOpacity={0.8}
+                style={[s.hdrAvtWrap, active && s.hdrAvtWrapActive]}>
+                {child.photo_url ? (
+                  <Image source={{ uri: child.photo_url }} style={s.hdrAvt} />
+                ) : (
+                  <View style={[s.hdrAvtFallback, active && s.hdrAvtFallbackActive]}>
+                    <Text style={[s.hdrAvtTxt, active && s.hdrAvtTxtActive]}>
+                      {(child.name || "?")[0].toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity onPress={handleLogout} style={s.logoutBtn}>
+            <Ionicons name="log-out-outline" size={20} color={COLORS.mid} />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={handleLogout} style={s.logoutBtn}>
-          <Ionicons name="log-out-outline" size={20} color={COLORS.mid} />
-        </TouchableOpacity>
       </View>
+
+      {/* ── Active child card ── */}
+      {activeChild && (
+        <View style={[s.activeChildCard, { marginBottom: 20 }]}>
+          {activeChild.photo_url ? (
+            <Image source={{ uri: activeChild.photo_url }} style={s.activeChildPhoto} />
+          ) : (
+            <View style={s.activeChildAvt}>
+              <Text style={s.activeChildAvtTxt}>{(activeChild.name || "?")[0].toUpperCase()}</Text>
+            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={s.activeChildName}>{activeChild.name}</Text>
+            <Text style={s.activeChildClass}>{activeChild.class}</Text>
+          </View>
+          {activeChild.todayAttendance && (
+            <View style={[s.badge, { backgroundColor: activeChild.todayAttendance === "present" ? COLORS.eduLight : "#FEE2E2" }]}>
+              <Text style={[s.badgeTxt, { color: activeChild.todayAttendance === "present" ? COLORS.edu : COLORS.error }]}>
+                {activeChild.todayAttendance === "present" ? t("present") : t("absent")}
+              </Text>
+            </View>
+          )}
+        </View>
+      )}
 
       {/* ── Audio Overviews ── */}
       <View style={s.section}>
@@ -264,90 +302,31 @@ export default function ParentHome() {
         <Ionicons name="chevron-forward" size={20} color={COLORS.mid} />
       </TouchableOpacity>
 
-      {/* ── Child Switcher + Active Card ── */}
-      {children.length > 0 && (
+      {/* ── Homework preview ── */}
+      {activeHomework.length > 0 && (
         <View style={s.section}>
-
-          {/* Tab switcher — only when 2+ children */}
-          {children.length > 1 && (
-            <View style={s.childTabs}>
-              {children.map((child: any, i: number) => {
-                const active = selectedIdx === i;
-                return (
-                  <TouchableOpacity
-                    key={i}
-                    style={[s.childTab, active && s.childTabActive]}
-                    onPress={() => setSelectedIdx(i)}
-                    activeOpacity={0.75}
-                  >
-                    {child.photo_url ? (
-                      <Image source={{ uri: child.photo_url }} style={[s.tabPhoto, active && s.tabPhotoActive]} />
-                    ) : (
-                      <View style={[s.tabAvt, active && s.tabAvtActive]}>
-                        <Text style={[s.tabAvtTxt, active && s.tabAvtTxtActive]}>
-                          {(child.name || "?")[0].toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                    <Text style={[s.tabName, active && s.tabNameActive]} numberOfLines={1}>{child.name}</Text>
-                    {active && <View style={s.tabDot} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-
-          {/* Active child card */}
-          {activeChild && (
-            <View style={s.activeChildCard}>
-              {activeChild.photo_url ? (
-                <Image source={{ uri: activeChild.photo_url }} style={s.activeChildPhoto} />
-              ) : (
-                <View style={s.activeChildAvt}>
-                  <Text style={s.activeChildAvtTxt}>{(activeChild.name || "?")[0].toUpperCase()}</Text>
-                </View>
-              )}
+          <Text style={[s.sectionTitle, { marginBottom: 8 }]}>Upcoming Homework</Text>
+          {activeHomework.slice(0, 2).map((hw: any, i: number) => (
+            <TouchableOpacity key={i} style={s.hwCard}
+              onPress={() => router.push("/(main)/parent/homework" as any)} activeOpacity={0.8}>
+              <View style={s.hwDot} />
               <View style={{ flex: 1 }}>
-                <Text style={s.activeChildName}>{activeChild.name}</Text>
-                <Text style={s.activeChildClass}>{activeChild.class}</Text>
+                <Text style={s.hwSubject}>{hw.subject || hw.title || "Homework"}</Text>
+                {(hw.description || hw.content) && (
+                  <Text style={s.hwDesc} numberOfLines={1}>{hw.description || hw.content}</Text>
+                )}
               </View>
-              {activeChild.todayAttendance && (
-                <View style={[s.badge, { backgroundColor: activeChild.todayAttendance === "present" ? COLORS.eduLight : "#FEE2E2" }]}>
-                  <Text style={[s.badgeTxt, { color: activeChild.todayAttendance === "present" ? COLORS.edu : COLORS.error }]}>
-                    {activeChild.todayAttendance === "present" ? t("present") : t("absent")}
-                  </Text>
-                </View>
+              {hw.due_date && (
+                <Text style={s.hwDue}>
+                  {new Date(hw.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                </Text>
               )}
-            </View>
-          )}
-
-          {/* Homework preview for this child */}
-          {activeHomework.length > 0 && (
-            <View style={{ marginTop: 12 }}>
-              <Text style={[s.sectionTitle, { marginBottom: 8 }]}>Upcoming Homework</Text>
-              {activeHomework.slice(0, 2).map((hw: any, i: number) => (
-                <TouchableOpacity key={i} style={s.hwCard}
-                  onPress={() => router.push("/(main)/parent/homework" as any)} activeOpacity={0.8}>
-                  <View style={s.hwDot} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.hwSubject}>{hw.subject || hw.title || "Homework"}</Text>
-                    {(hw.description || hw.content) && (
-                      <Text style={s.hwDesc} numberOfLines={1}>{hw.description || hw.content}</Text>
-                    )}
-                  </View>
-                  {hw.due_date && (
-                    <Text style={s.hwDue}>
-                      {new Date(hw.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-              {activeHomework.length > 2 && (
-                <TouchableOpacity style={s.hwMore} onPress={() => router.push("/(main)/parent/homework" as any)}>
-                  <Text style={s.hwMoreTxt}>+{activeHomework.length - 2} more assignments →</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+            </TouchableOpacity>
+          ))}
+          {activeHomework.length > 2 && (
+            <TouchableOpacity style={s.hwMore} onPress={() => router.push("/(main)/parent/homework" as any)}>
+              <Text style={s.hwMoreTxt}>+{activeHomework.length - 2} more assignments →</Text>
+            </TouchableOpacity>
           )}
         </View>
       )}
@@ -414,9 +393,16 @@ const s = StyleSheet.create({
   root:           { flex: 1, backgroundColor: COLORS.bg },
   content:        { padding: 20, paddingBottom: 50 },
   center:         { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.bg },
-  header:         { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
-  greeting:       { fontSize: 13, color: COLORS.mid },
-  name:           { fontSize: 20, fontWeight: "800", color: COLORS.dark },
+  header:         { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  greeting:       { fontSize: 22, fontWeight: "800", color: COLORS.dark },
+  headerRight:    { flexDirection: "row", alignItems: "center", gap: 8 },
+  hdrAvtWrap:     { borderRadius: 24, borderWidth: 2, borderColor: "transparent" },
+  hdrAvtWrapActive:{ borderColor: COLORS.edu },
+  hdrAvt:         { width: 44, height: 44, borderRadius: 22 },
+  hdrAvtFallback: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#EBEBEB", alignItems: "center", justifyContent: "center" },
+  hdrAvtFallbackActive: { backgroundColor: COLORS.edu },
+  hdrAvtTxt:      { fontSize: 16, fontWeight: "700", color: COLORS.mid },
+  hdrAvtTxtActive:{ color: "#fff" },
   logoutBtn:      { padding: 8 },
   section:        { marginBottom: 24 },
   sectionRow:     { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
@@ -442,20 +428,6 @@ const s = StyleSheet.create({
   agentIconBox:   { width: 48, height: 48, borderRadius: 16, backgroundColor: "#7C3AED18", alignItems: "center", justifyContent: "center" },
   agentTitle:     { fontSize: 15, fontWeight: "800", color: COLORS.dark },
   agentDesc:      { fontSize: 12, color: COLORS.mid, marginTop: 3, lineHeight: 18 },
-
-  // Child tab switcher
-  childTabs:        { flexDirection: "row", backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 12, overflow: "hidden" },
-  childTab:         { flex: 1, alignItems: "center", paddingVertical: 12, paddingHorizontal: 8, gap: 5 },
-  childTabActive:   { backgroundColor: COLORS.eduLight },
-  tabPhoto:         { width: 46, height: 46, borderRadius: 23, borderWidth: 2, borderColor: "transparent" },
-  tabPhotoActive:   { borderColor: COLORS.edu },
-  tabAvt:           { width: 46, height: 46, borderRadius: 23, backgroundColor: "#EBEBEB", alignItems: "center", justifyContent: "center" },
-  tabAvtActive:     { backgroundColor: COLORS.edu },
-  tabAvtTxt:        { fontSize: 18, fontWeight: "700", color: COLORS.mid },
-  tabAvtTxtActive:  { color: "#fff" },
-  tabName:          { fontSize: 12, fontWeight: "600", color: COLORS.mid },
-  tabNameActive:    { color: COLORS.edu, fontWeight: "800" },
-  tabDot:           { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.edu },
 
   // Active child card
   activeChildCard:   { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: COLORS.edu },

@@ -6,7 +6,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../src/lib/constants";
-import { getTeacherDashboard } from "../../../src/lib/api";
+import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
 import { useRealtime } from "../../../src/lib/realtime";
 
@@ -20,10 +20,30 @@ export default function TeacherHome() {
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
     try {
-      if (session?.token) {
-        const res = await getTeacherDashboard(session.token);
-        if (!res?.error) setData(res);
-      }
+      const sid = session?.sectionId;
+      if (!sid) { setLoading(false); setRefresh(false); return; }
+      const todayDate = new Date().toISOString().split("T")[0];
+      const [
+        { count: totalStudents },
+        { count: presentToday },
+        { count: absentToday },
+        { count: homeworkDue },
+        { data: notices },
+      ] = await Promise.all([
+        supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("section_id", sid),
+        supabase.from("attendance").select("id", { count: "exact", head: true }).eq("section_id", sid).eq("date", todayDate).eq("status", "present"),
+        supabase.from("attendance").select("id", { count: "exact", head: true }).eq("section_id", sid).eq("date", todayDate).eq("status", "absent"),
+        supabase.from("homework").select("id", { count: "exact", head: true }).eq("section_id", sid).gte("due_date", todayDate),
+        supabase.from("announcements").select("title,message").or("target.eq.all,target.eq.teachers").order("created_at", { ascending: false }).limit(5),
+      ]);
+      setData({
+        totalStudents: totalStudents ?? 0,
+        presentToday:  presentToday  ?? 0,
+        absentToday:   absentToday   ?? 0,
+        homeworkDue:   homeworkDue   ?? 0,
+        sectionName:   session?.sectionId,
+        notices:       notices || [],
+      });
     } catch {}
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
@@ -104,7 +124,7 @@ export default function TeacherHome() {
           { label: "Mark Attendance", icon: "checkmark-circle-outline", tab: "attendance" },
           { label: "View Students",   icon: "people-outline",           tab: "students" },
           { label: "Homework",        icon: "book-outline",             tab: "homework" },
-          { label: "AI Tools",        icon: "sparkles-outline",         tab: "ai" },
+          { label: "Community",       icon: "chatbubbles-outline",      tab: "community" },
         ].map((item) => (
           <TouchableOpacity
             key={item.tab}

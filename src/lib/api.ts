@@ -1,4 +1,5 @@
-import { EDU_API } from "./constants";
+import { EDU_API, SUPABASE_URL, SUPABASE_ANON } from "./constants";
+import { supabase } from "./supabase";
 
 export type Role = "parent" | "teacher";
 
@@ -49,13 +50,58 @@ export async function teacherLogin(username: string, password: string) {
 }
 
 // ── Parent Data ───────────────────────────────────────────────────────────
+// Queries Supabase directly — avoids web middleware cookie auth block
 export async function getParentDashboard(phone: string) {
-  const now   = new Date();
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const res   = await fetch(
-    `${EDU_API}/api/parent/dashboard?phone=${encodeURIComponent(phone)}&month=${month}`
-  );
-  return res.json();
+  const digits  = phone.replace(/\D/g, "");
+  const phone10  = digits.slice(-10);
+  const phone12  = `91${phone10}`;
+  const phoneP12 = `+91${phone10}`;
+
+  const now     = new Date();
+  const month   = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const [y, mo] = month.split("-").map(Number);
+  const lastDay = new Date(y, mo, 0).getDate();
+  const dateEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+
+  const [{ data: enquiries }, { data: announcements }, { data: calendarEvents }] = await Promise.all([
+    supabase
+      .from("enquiries")
+      .select("id,child_name,child_dob,child_age_months,program_label,program_id,status,section_id,section_name,created_at,photo_url")
+      .or(`phone.eq.${phone10},phone.eq.${phone12},phone.eq.${phoneP12}`)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("announcements")
+      .select("*")
+      .or("target.eq.all,target.eq.parents")
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("calendar_events")
+      .select("*")
+      .gte("event_date", `${month}-01`)
+      .lte("event_date", dateEnd)
+      .order("event_date"),
+  ]);
+
+  const sectionIds = (enquiries || []).map((e: any) => e.section_id).filter(Boolean);
+  let homework: any[] = [];
+  if (sectionIds.length > 0) {
+    const { data: hw } = await supabase
+      .from("homework")
+      .select("*")
+      .in("section_id", sectionIds)
+      .gte("due_date", `${month}-01`)
+      .order("due_date");
+    homework = hw || [];
+  }
+
+  return {
+    enquiries:      enquiries      || [],
+    calendarEvents: calendarEvents || [],
+    announcements:  announcements  || [],
+    homework,
+    photos: [],
+  };
 }
 
 export async function getCalendar(month: string) {
@@ -192,8 +238,6 @@ export async function savePickupAuth(payload: object) {
 }
 
 export async function getAudioOverviews(_token?: string, lang?: string) {
-  // Query Supabase directly so the language filter works without a web-app redeploy
-  const { SUPABASE_URL, SUPABASE_ANON } = await import("./constants");
   let url = `${SUPABASE_URL}/rest/v1/audio_overviews?select=id,title,audio_url,status,duration_seconds,source_type,language,created_at&status=eq.ready&order=created_at.desc&limit=50`;
   if (lang) url += `&language=eq.${lang}`;
   const res = await fetch(url, {
