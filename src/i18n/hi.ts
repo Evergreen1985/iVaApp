@@ -69,6 +69,7 @@ export default {
   kitBooks:          "किट और किताबें",
   referrals:         "रेफरल",
   payments:          "भुगतान",
+  reels:             "रील्स",
   moreFeatures:      "और सुविधाएं",
 
   // AI Tools

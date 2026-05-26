@@ -49,6 +49,7 @@ export default function ParentLayout() {
       <Tabs.Screen name="referrals"  options={{ href: null }} />
       <Tabs.Screen name="transport"  options={{ href: null }} />
       <Tabs.Screen name="kit"        options={{ href: null }} />
+      <Tabs.Screen name="reels"      options={{ href: null }} />
     </Tabs>
   );
 }

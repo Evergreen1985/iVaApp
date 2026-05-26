@@ -41,6 +41,7 @@ export default function ParentProfile() {
     { label: t("documents"),  icon: "document-text-outline",   route: "/(main)/parent/documents" },
     { label: t("kitBooks"),   icon: "bag-outline",             route: "/(main)/parent/kit" },
     { label: t("referrals"),  icon: "gift-outline",            route: "/(main)/parent/referrals" },
+    { label: t("reels"),      icon: "film-outline",            route: "/(main)/parent/reels" },
   ];
 
   return (

@@ -69,6 +69,7 @@ export default {
   kitBooks:          "కిట్ & పుస్తకాలు",
   referrals:         "రెఫరల్స్",
   payments:          "చెల్లింపులు",
+  reels:             "రీల్స్",
   moreFeatures:      "మరిన్ని సేవలు",
 
   // AI Tools

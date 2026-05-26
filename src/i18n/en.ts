@@ -70,6 +70,7 @@ export default {
   referrals:         "Referrals",
   payments:          "Payments",
   moreFeatures:      "More Features",
+  reels:             "Reels",
 
   // AI Tools
   generate:          "Generate →",
