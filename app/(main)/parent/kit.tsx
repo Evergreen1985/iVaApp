@@ -19,9 +19,9 @@ const CATEGORY_ICONS: Record<string, string> = {
 
 export default function ParentKit() {
   const { t } = useTranslation();
-  const { session } = useSession();
-  const child = session?.children?.[0];
-  const enquiryId = child?.id || child?.enquiry_id || "";
+  const { activeChild } = useSession();
+  const child    = activeChild;
+  const enquiryId = child?.id || "";
 
   const [kitItems, setKitItems] = useState<any[]>([]);
   const [loading, setLoading]   = useState(true);

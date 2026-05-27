@@ -5,8 +5,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../src/lib/constants";
-import { getHomework } from "../../../src/lib/api";
-import { EDU_API } from "../../../src/lib/constants";
+import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
 import { useRealtime } from "../../../src/lib/realtime";
 
@@ -30,9 +29,13 @@ export default function TeacherHomework() {
     if (isRefresh) setRefresh(true); else setLoading(true);
     try {
       if (session?.sectionId) {
-        const res = await getHomework(session.sectionId);
-        const hw = res?.homework ?? res;
-        setList(Array.isArray(hw) ? hw : []);
+        const { data } = await supabase
+          .from("homework")
+          .select("*")
+          .eq("section_id", session.sectionId)
+          .order("created_at", { ascending: false })
+          .limit(50);
+        setList(data || []);
       }
     } catch {}
     if (isRefresh) setRefresh(false); else setLoading(false);
@@ -45,22 +48,20 @@ export default function TeacherHomework() {
     if (!title.trim()) { Alert.alert("Enter a title"); return; }
     setSubmitting(true);
     try {
-      const res = await fetch(`${EDU_API}/api/teacher/homework`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.token}` },
-        body: JSON.stringify({
-          sectionId: session?.sectionId,
-          subject, title, description: desc,
-          dueDate: dueDate || undefined,
-        }),
+      const { error } = await supabase.from("homework").insert({
+        section_id:  session?.sectionId,
+        subject,
+        title:       title.trim(),
+        description: desc.trim() || null,
+        due_date:    dueDate || null,
+        assigned_by: session?.name || null,
       });
-      const data = await res.json();
-      if (data.error) { Alert.alert("Error", data.error); return; }
+      if (error) { Alert.alert("Error", error.message); return; }
       setTitle(""); setDesc(""); setDueDate(""); setShowForm(false);
       load();
       Alert.alert("Done", "Homework assigned!");
-    } catch {
-      Alert.alert("Error", "Could not save. Check connection.");
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Could not save. Check connection.");
     } finally {
       setSubmitting(false);
     }

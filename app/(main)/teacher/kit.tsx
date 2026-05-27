@@ -6,8 +6,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { COLORS } from "../../../src/lib/constants";
+import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
-import { getStudents, getKitItems, updateKitItem } from "../../../src/lib/api";
+import { getKitItems, updateKitItem } from "../../../src/lib/api";
 
 export default function TeacherKit() {
   const { t } = useTranslation();
@@ -23,12 +24,26 @@ export default function TeacherKit() {
 
   useEffect(() => {
     (async () => {
-      if (!sectionId) { setLoadingStudents(false); return; }
+      if (!session?.name) { setLoadingStudents(false); return; }
       try {
-        const res = await getStudents(sectionId);
-        const list = res?.children || res?.students || (Array.isArray(res) ? res : []);
+        // Get all sections this teacher manages
+        let sectionIds: string[] = [];
+        if (session.name) {
+          const { data: secs } = await supabase
+            .from("sections").select("id").eq("class_teacher", session.name);
+          sectionIds = (secs || []).map((s: any) => s.id);
+        }
+        if (sectionIds.length === 0 && sectionId) sectionIds = [sectionId];
+        if (sectionIds.length === 0) { setLoadingStudents(false); return; }
+
+        const { data: enquiries } = await supabase
+          .from("enquiries")
+          .select("id, child_name")
+          .in("section_id", sectionIds)
+          .order("child_name");
+        const list = enquiries || [];
         setStudents(list);
-        if (list.length === 1) selectStudent(list[0].id, list[0].enquiry_id || list[0].id);
+        if (list.length === 1) selectStudent(list[0].id, list[0].id);
       } catch { setStudents([]); }
       setLoadingStudents(false);
     })();
@@ -85,15 +100,12 @@ export default function TeacherKit() {
                   <TouchableOpacity
                     key={child.id}
                     style={[s.studentPill, selectedId === child.id && s.studentPillActive]}
-                    onPress={() => selectStudent(child.id, child.enquiry_id || child.id)}
+                    onPress={() => selectStudent(child.id, child.id)}
                     activeOpacity={0.7}
                   >
                     <Text style={[s.studentName, selectedId === child.id && s.studentNameActive]}>
                       {child.child_name || child.name}
                     </Text>
-                    {child.program_label && (
-                      <Text style={s.studentProg}>{child.program_label}</Text>
-                    )}
                   </TouchableOpacity>
                 ))}
               </View>

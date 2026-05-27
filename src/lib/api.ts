@@ -188,8 +188,14 @@ export async function getCalendar(month: string) {
 }
 
 export async function getFeeDues(enquiryId: string) {
-  const res = await fetch(`${EDU_API}/api/fees/assignments?enquiryId=${enquiryId}&status=pending,overdue`);
-  return res.json();
+  const { data, error } = await supabase
+    .from("fee_assignments")
+    .select("*, fee_structures(name, fee_type)")
+    .eq("enquiry_id", enquiryId)
+    .in("status", ["pending", "overdue"])
+    .order("due_date", { ascending: true });
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
 // ── Teacher Data ──────────────────────────────────────────────────────────
@@ -286,33 +292,78 @@ export async function logIncident(payload: object) {
   return res.json();
 }
 
-// ── Parent extras ──────────────────────────────────────────────────────────
+// ── Parent extras — all query Supabase directly so web admin changes sync instantly ──
 export async function getMedical(enquiryId: string) {
-  const res = await fetch(`${EDU_API}/api/medical?enquiryId=${enquiryId}`);
-  return res.json();
+  const { data } = await supabase
+    .from("child_medical")
+    .select("*")
+    .eq("enquiry_id", enquiryId)
+    .maybeSingle();
+  if (!data) return null;
+  // Normalise to camelCase that the mobile screen expects
+  return {
+    bloodGroup:  data.blood_group || "",
+    allergies:   Array.isArray(data.allergies)
+                   ? data.allergies.join(", ")
+                   : (data.allergies || ""),
+    conditions:  data.medical_conditions || "",
+    emergency:   Array.isArray(data.emergency_contacts)
+                   ? data.emergency_contacts.map((e: any) => (typeof e === "string" ? e : (e.name || ""))).join(", ")
+                   : (data.emergency_contacts || ""),
+  };
 }
 
-export async function saveMedical(payload: object) {
-  const res = await fetch(`${EDU_API}/api/medical`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return res.json();
+export async function saveMedical(payload: any) {
+  const { enquiryId, childName, bloodGroup, allergies, conditions, emergency } = payload;
+  if (!enquiryId) return { error: "No child selected" };
+  const { error } = await supabase
+    .from("child_medical")
+    .upsert({
+      enquiry_id:         enquiryId,
+      child_name:         childName        || "",
+      blood_group:        bloodGroup       || "",
+      allergies:          allergies        ? [allergies]               : [],
+      medical_conditions: conditions       || "",
+      emergency_contacts: emergency        ? [{ name: emergency }]     : [],
+      updated_at:         new Date().toISOString(),
+    }, { onConflict: "enquiry_id" });
+  if (error) return { error: error.message };
+  return { success: true };
 }
 
 export async function getPickupAuth(enquiryId: string) {
-  const res = await fetch(`${EDU_API}/api/pickup?enquiryId=${enquiryId}`);
-  return res.json();
+  const { data } = await supabase
+    .from("pickup_authorizations")
+    .select("id,authorized_name,relation,phone,is_active")
+    .eq("enquiry_id", enquiryId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: true });
+  // Normalise field names for the mobile screen
+  return (data || []).map((p: any) => ({
+    id:       p.id,
+    name:     p.authorized_name || "",
+    relation: p.relation        || "",
+    phone:    p.phone           || "",
+  }));
 }
 
-export async function savePickupAuth(payload: object) {
-  const res = await fetch(`${EDU_API}/api/pickup`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return res.json();
+export async function savePickupAuth(payload: any) {
+  const { enquiryId, persons } = payload;
+  if (!enquiryId) return { error: "No child selected" };
+  // Replace all authorizations with the new list
+  await supabase.from("pickup_authorizations").delete().eq("enquiry_id", enquiryId);
+  if (!persons?.length) return { success: true };
+  const rows = persons.map((p: any) => ({
+    enquiry_id:      enquiryId,
+    authorized_name: p.name || p.authorized_name || "",
+    relation:        p.relation || "",
+    phone:           p.phone   || "",
+    is_active:       true,
+    added_by:        "parent",
+  }));
+  const { error } = await supabase.from("pickup_authorizations").insert(rows);
+  if (error) return { error: error.message };
+  return { success: true };
 }
 
 export async function getAudioOverviews(_token?: string, lang?: string) {
@@ -381,17 +432,47 @@ export async function markRideStatus(payload: object) {
 
 // ── Documents ─────────────────────────────────────────────────────────────────
 export async function getDocuments(enquiryId: string) {
-  const res = await fetch(`${EDU_API}/api/documents?enquiryId=${encodeURIComponent(enquiryId)}`);
-  return res.json();
+  const { data } = await supabase
+    .from("child_documents")
+    .select("id,document_type,document_label,file_url,file_name,status,created_at")
+    .eq("enquiry_id", enquiryId)
+    .order("created_at", { ascending: false });
+  return data || [];
 }
 
-export async function uploadDocument(payload: object) {
-  const res = await fetch(`${EDU_API}/api/documents`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+export async function uploadDocument(payload: any) {
+  const { enquiryId, childName, docType, fileName, base64, mimeType, uploadedBy } = payload;
+  if (!enquiryId || !base64) return { error: "Missing data" };
+
+  const ext  = (mimeType || "image/jpeg").split("/").pop() || "jpg";
+  const path = `documents/${enquiryId}/${(docType || "doc").replace(/\s/g, "_")}_${Date.now()}.${ext}`;
+
+  // Convert base64 → binary
+  const binary = atob(base64);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  const { error: upErr } = await supabase.storage
+    .from("school-photos")
+    .upload(path, bytes.buffer, { contentType: mimeType || "image/jpeg", upsert: true });
+  if (upErr) return { error: upErr.message };
+
+  const { data: { publicUrl } } = supabase.storage.from("school-photos").getPublicUrl(path);
+
+  const { error: dbErr } = await supabase.from("child_documents").insert({
+    enquiry_id:     enquiryId,
+    child_name:     childName      || "",
+    document_type:  docType        || "",
+    document_label: docType        || "",
+    file_url:       publicUrl,
+    file_name:      fileName       || `${docType}.${ext}`,
+    mime_type:      mimeType       || "image/jpeg",
+    uploaded_by:    uploadedBy     || "parent",
+    status:         "pending",
+    created_at:     new Date().toISOString(),
   });
-  return res.json();
+  if (dbErr) return { error: dbErr.message };
+  return { success: true, file_url: publicUrl };
 }
 
 // ── Referrals ──────────────────────────────────────────────────────────────────
@@ -412,8 +493,16 @@ export async function getPTMSchedule(sectionId: string) {
 
 // ── Kit ────────────────────────────────────────────────────────────────────────
 export async function getKitItems(enquiryId: string) {
-  const res = await fetch(`${EDU_API}/api/kit?enquiryId=${encodeURIComponent(enquiryId)}`);
-  return res.json();
+  const { data } = await supabase
+    .from("child_kit")
+    .select("id,item_name,item_category,issued,quantity,size,school_notes")
+    .eq("enquiry_id", enquiryId)
+    .order("item_category")
+    .order("created_at");
+  return (data || []).map((k: any) => ({
+    ...k,
+    is_issued: k.issued,   // normalise for screen
+  }));
 }
 
 export async function updateKitItem(payload: object) {
@@ -826,13 +915,13 @@ export async function deleteEnquiryRecord(_token: string, id: string) {
   const { data: existing } = await supabase.from("enquiries").select("id").eq("id", id).maybeSingle();
   if (!existing) throw new Error(`No enquiry found with id: ${id}`);
 
-  // Delete related records (ignore errors if tables don't exist)
+  // Delete related records — correct table names confirmed from web app
   await supabase.from("attendance").delete().eq("enquiry_id", id);
   await supabase.from("fee_assignments").delete().eq("enquiry_id", id);
-  await supabase.from("kit_assignments").delete().eq("enquiry_id", id);
-  await supabase.from("medical_records").delete().eq("enquiry_id", id);
+  await supabase.from("child_kit").delete().eq("enquiry_id", id);
+  await supabase.from("child_medical").delete().eq("enquiry_id", id);
   await supabase.from("pickup_authorizations").delete().eq("enquiry_id", id);
-  await supabase.from("documents").delete().eq("enquiry_id", id);
+  await supabase.from("child_documents").delete().eq("enquiry_id", id);
 
   // Delete the enquiry itself — use select() to confirm it was deleted
   const { data: deleted, error } = await supabase

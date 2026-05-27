@@ -25,7 +25,9 @@
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ]
     },
     "web": {
@@ -45,6 +47,12 @@
       ],
       "expo-notifications",
       "expo-av",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow iVa to access your location to share the bus position with parents."
+        }
+      ],
       [
         "expo-splash-screen",
         {

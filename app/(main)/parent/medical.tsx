@@ -11,8 +11,8 @@ import { getMedical, saveMedical } from "../../../src/lib/api";
 
 export default function ParentMedical() {
   const { t } = useTranslation();
-  const { session } = useSession();
-  const enquiryId = session?.children?.[0]?.enquiryId || session?.children?.[0]?.id || "";
+  const { activeChild } = useSession();
+  const enquiryId = activeChild?.id || "";
 
   const [bloodGroup,  setBloodGroup]  = useState("");
   const [allergies,   setAllergies]   = useState("");
@@ -40,7 +40,7 @@ export default function ParentMedical() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const res = await saveMedical({ enquiryId, bloodGroup, allergies, conditions, emergency });
+      const res = await saveMedical({ enquiryId, childName: activeChild?.child_name || activeChild?.name, bloodGroup, allergies, conditions, emergency });
       if (!res?.error) {
         Alert.alert(t("success"), t("saveMedical"));
       } else {

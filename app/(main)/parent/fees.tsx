@@ -80,7 +80,7 @@ export default function ParentFees() {
           <View key={i} style={s.card}>
             <View style={s.cardRow}>
               <View style={{ flex: 1 }}>
-                <Text style={s.feeName}>{due.feeName || due.title || due.fee_name || "Fee"}</Text>
+                <Text style={s.feeName}>{due.fee_structures?.name || due.feeName || due.fee_name || due.period_label || "Fee"}</Text>
                 {(due.dueDate || due.due_date) && (
                   <Text style={s.dueDate}>
                     Due: {new Date(due.dueDate || due.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}

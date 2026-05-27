@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS } from "../../../src/lib/constants";
-import { getStudents, saveAttendance } from "../../../src/lib/api";
+import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
 
 type Status = "present" | "absent" | "leave";
@@ -31,15 +31,28 @@ export default function TeacherAttendance() {
     if (isRefresh) setRefresh(true); else setLoading(true);
     try {
       if (session?.sectionId) {
-        const res = await getStudents(session.sectionId);
-        const list: StudentRow[] = (res?.students || res || []).map((s: any) => ({
-          id:     s.id || s.studentId,
-          name:   s.name || s.studentName,
-          rollNo: s.rollNo,
-          status: "present" as Status,
+        const todayDate = new Date().toISOString().split("T")[0];
+        const [{ data: enquiries }, { data: existing }] = await Promise.all([
+          supabase
+            .from("enquiries")
+            .select("id, child_name")
+            .eq("section_id", session.sectionId)
+            .order("child_name"),
+          supabase
+            .from("attendance")
+            .select("student_id, status")
+            .eq("section_id", session.sectionId)
+            .eq("date", todayDate),
+        ]);
+        const existingMap: Record<string, Status> = {};
+        (existing || []).forEach((a: any) => { existingMap[a.student_id] = a.status; });
+        const list: StudentRow[] = (enquiries || []).map((e: any) => ({
+          id:     e.id,
+          name:   e.child_name,
+          status: (existingMap[e.id] as Status) || "present",
         }));
         setStudents(list);
-        setSaved(false);
+        setSaved(Object.keys(existingMap).length > 0);
       }
     } catch {}
     if (isRefresh) setRefresh(false); else setLoading(false);
@@ -59,19 +72,27 @@ export default function TeacherAttendance() {
 
   const handleSave = async () => {
     setSaving(true);
-    const payload = {
-      sectionId: session?.sectionId,
-      date:      new Date().toISOString().split("T")[0],
-      attendance: students.map((s) => ({ studentId: s.id, status: s.status })),
-    };
-    const res = await saveAttendance(payload);
-    setSaving(false);
-    if (res.error) {
-      Alert.alert("Error", res.error);
-    } else {
-      setSaved(true);
-      Alert.alert("Saved", "Attendance saved successfully!");
+    try {
+      const todayDate = new Date().toISOString().split("T")[0];
+      const rows = students.map((s) => ({
+        section_id:  session?.sectionId,
+        student_id:  s.id,
+        date:        todayDate,
+        status:      s.status,
+      }));
+      const { error } = await supabase
+        .from("attendance")
+        .upsert(rows, { onConflict: "section_id,student_id,date" });
+      if (error) {
+        Alert.alert("Error", error.message);
+      } else {
+        setSaved(true);
+        Alert.alert("Saved", "Attendance saved successfully!");
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Could not save attendance.");
     }
+    setSaving(false);
   };
 
   const presentCount = students.filter((s) => s.status === "present").length;

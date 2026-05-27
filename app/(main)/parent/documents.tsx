@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import { COLORS } from "../../../src/lib/constants";
 import { getDocuments, uploadDocument } from "../../../src/lib/api";
 import { useSession } from "../../../src/store/session";
+import { supabase } from "../../../src/lib/supabase";
 
 const REQUIRED_DOCS = [
   "Birth Certificate",
@@ -18,20 +19,20 @@ const REQUIRED_DOCS = [
 ];
 
 export default function ParentDocuments() {
-  const { session } = useSession();
+  const { session, activeChild } = useSession();
   const [docs, setDocs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
 
-  const child = session?.children?.[0];
+  const child = activeChild;
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
     try {
       if (child?.id) {
         const res = await getDocuments(child.id);
-        setDocs(Array.isArray(res) ? res : res?.documents || []);
+        setDocs(Array.isArray(res) ? res : []);
       }
     } catch {}
     if (isRefresh) setRefresh(false); else setLoading(false);
@@ -55,11 +56,12 @@ export default function ParentDocuments() {
     try {
       const asset = result.assets[0];
       const data = await uploadDocument({
-        enquiryId: child?.id,
+        enquiryId:  child?.id,
+        childName:  child?.child_name || child?.name || "",
         docType,
-        fileName: asset.fileName || `${docType.replace(/\s/g, "_")}.jpg`,
-        base64: asset.base64,
-        mimeType: asset.mimeType || "image/jpeg",
+        fileName:   asset.fileName || `${docType.replace(/\s/g, "_")}.jpg`,
+        base64:     asset.base64,
+        mimeType:   asset.mimeType || "image/jpeg",
         uploadedBy: session?.phone || "parent",
       });
       if (data.error) {
@@ -97,7 +99,7 @@ export default function ParentDocuments() {
                 <Ionicons name="document-text" size={22} color={COLORS.edu} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={s.docName}>{doc.doc_type || doc.file_name || "Document"}</Text>
+                <Text style={s.docName}>{doc.document_label || doc.document_type || doc.doc_type || doc.file_name || "Document"}</Text>
                 <Text style={s.docDate}>
                   {doc.created_at ? new Date(doc.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                 </Text>
@@ -122,7 +124,7 @@ export default function ParentDocuments() {
         <Text style={s.sectionSub}>Tap to upload from your gallery. Accepted formats: JPG, PNG, PDF (via camera roll).</Text>
         {REQUIRED_DOCS.map((docType) => {
           const uploaded = docs.find((d: any) =>
-            (d.doc_type || "").toLowerCase().includes(docType.toLowerCase().split(" ")[0])
+            (d.document_type || d.doc_type || "").toLowerCase().includes(docType.toLowerCase().split(" ")[0])
           );
           const isBusy = uploading === docType;
           return (

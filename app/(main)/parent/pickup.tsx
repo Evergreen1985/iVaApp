@@ -11,8 +11,8 @@ import { getPickupAuth, savePickupAuth } from "../../../src/lib/api";
 
 export default function ParentPickup() {
   const { t } = useTranslation();
-  const { session } = useSession();
-  const enquiryId = session?.children?.[0]?.enquiryId || session?.children?.[0]?.id || "";
+  const { activeChild } = useSession();
+  const enquiryId = activeChild?.id || "";
 
   const [persons, setPersons] = useState<{ name: string; relation: string }[]>([]);
   const [name, setName]       = useState("");

@@ -113,13 +113,9 @@ export default function ParentReels() {
     }
   }, [generating]);
 
-  useEffect(() => { loadPhotos(); }, []);
-  useRealtime("section_photos", loadPhotos);
-
   const loadPhotos = async () => {
     setPhotoLoad(true);
     try {
-      // Show all school photos — teachers upload for the whole school
       const { data: photos } = await supabase
         .from("section_photos")
         .select("id, photo_url, title, section_name, uploaded_at")
@@ -129,6 +125,9 @@ export default function ParentReels() {
     } catch {}
     setPhotoLoad(false);
   };
+
+  useEffect(() => { loadPhotos(); }, []);
+  useRealtime("section_photos", loadPhotos);
 
   const togglePhoto = useCallback((url: string) => {
     setSelected(prev => {
