@@ -4,22 +4,100 @@ import { supabase } from "./supabase";
 export type Role = "parent" | "teacher";
 
 // ── Auth ──────────────────────────────────────────────────────────────────
+
+// Normalise phone to 10-digit format for Supabase lookups
+function phone10(phone: string) { return phone.replace(/\D/g, "").slice(-10); }
+
 export async function parentLogin(phone: string, password: string) {
-  const res = await fetch(`${EDU_API}/api/auth/parent-login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, password, action: "login" }),
-  });
-  return res.json();
+  const ph = phone10(phone);
+  try {
+    const res  = await fetch(`${EDU_API}/api/auth/parent-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: ph, password, action: "login" }),
+    });
+    return res.json();
+  } catch {
+    return { error: "Unable to connect to the school server. Please check your internet connection." };
+  }
 }
 
+// DOB normaliser — converts any format to YYYYMMDD digits for comparison
+function normaliseDob(d: string): string {
+  const p = d.replace(/[^0-9]/g, "");
+  if (p.length !== 8) return p;
+  // If first 4 digits look like a year (>1900) it's already YYYYMMDD
+  if (parseInt(p.slice(0, 4)) > 1900) return p;
+  // Otherwise assume DDMMYYYY → convert to YYYYMMDD
+  return p.slice(4) + p.slice(2, 4) + p.slice(0, 2);
+}
+
+
 export async function parentFirstLogin(phone: string, dob: string, last4: string) {
-  const res = await fetch(`${EDU_API}/api/auth/parent-login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, dob, last4, action: "first-login" }),
-  });
-  return res.json();
+  const ph = phone10(phone);
+
+  // Convert user-entered DOB (DD/MM/YYYY or any format) → YYYY-MM-DD for backend
+  const norm = normaliseDob(dob); // → YYYYMMDD string
+  if (norm.length !== 8) {
+    return { error: "Invalid date format. Please use DD/MM/YYYY (e.g. 25/12/2020)" };
+  }
+  const dobISO = `${norm.slice(0, 4)}-${norm.slice(4, 6)}-${norm.slice(6, 8)}`; // YYYY-MM-DD
+
+  // Fetch child info from Supabase enquiries (to pass child_name & enquiry_id to backend)
+  const { data: enq } = await supabase
+    .from("enquiries")
+    .select("id,child_name,child_dob")
+    .or(`phone.eq.${ph},phone.eq.91${ph},phone.eq.+91${ph}`)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!enq) {
+    return { error: "No enrolment found for this phone number. Please contact the school." };
+  }
+
+  // Step 1: ensure parent_accounts exists with correct DOB (create or patch)
+  try {
+    await fetch(`${EDU_API}/api/auth/parent-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone:     ph,
+        action:    "create",
+        childName: enq.child_name || "",
+        childDob:  dobISO,          // ← pass DOB so backend can store/patch it
+        enquiryId: enq.id || "",
+      }),
+    });
+  } catch { /* network glitch — continue to first-login attempt */ }
+
+  // Step 2: first-login — backend verifies DOB & sets bcrypt password
+  try {
+    const res  = await fetch(`${EDU_API}/api/auth/parent-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: ph, dob: dobISO, last4: last4.trim(), action: "first-login" }),
+    });
+    const data = await res.json();
+
+    if (data.error?.toLowerCase().includes("too many")) {
+      return { error: "Too many attempts. Please wait 15–30 minutes and try again." };
+    }
+
+    if (!data.error) {
+      // Compute the auto-password (same formula the backend uses) so we can show it
+      const initial  = (enq.child_name || "E").charAt(0).toUpperCase();
+      const year     = dobISO.slice(0, 4);
+      const autoPass = `${initial}${year}${last4.trim()}`;
+      return { success: true, childName: data.childName || enq.child_name || "", autoPass };
+    }
+
+    // Surface backend's exact error (DOB mismatch, already set up, etc.)
+    return { error: data.error };
+
+  } catch {
+    return { error: "Unable to connect to the school server. Please check your internet connection." };
+  }
 }
 
 export async function sendResetOTP(phone: string) {
@@ -363,6 +441,34 @@ function adminHeaders(token: string) {
 }
 
 // ── Admin: Enquiries ───────────────────────────────────────────────────────────
+export async function registerParentAccount(token: string, phone: string, childName: string) {
+  // Try POST /api/admin/parents first, fallback to /api/admin/create-parent
+  const tryEndpoint = async (url: string, body: object) => {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: adminHeaders(token),
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    try { return { status: res.status, data: JSON.parse(text) }; }
+    catch { return { status: res.status, data: null, raw: text.slice(0, 300) }; }
+  };
+
+  // Attempt 1: /api/admin/parents
+  const r1 = await tryEndpoint(`${EDU_API}/api/admin/parents`, { phone, child_name: childName, name: childName });
+  if (r1.status < 400) return r1.data;
+  if (r1.status !== 404) {
+    // Got a real response (400/422/etc) — return it so caller can show the message
+    if (r1.data) return r1.data;
+    throw new Error(`/api/admin/parents (${r1.status}): ${r1.raw}`);
+  }
+
+  // Attempt 2: /api/admin/create-parent
+  const r2 = await tryEndpoint(`${EDU_API}/api/admin/create-parent`, { phone, child_name: childName, name: childName });
+  if (r2.status < 400) return r2.data;
+  if (r2.data) return r2.data;
+  throw new Error(`/api/admin/create-parent (${r2.status}): ${r2.raw}`);
+}
 export async function getEnquiries(token: string, status?: string) {
   const q = status ? `?status=${status}` : "";
   const res = await fetch(`${EDU_API}/api/admin/enquiries${q}`, { headers: adminHeaders(token) });
@@ -699,9 +805,52 @@ export async function getOwnerDashboard(token: string) {
 }
 
 // ── Owner: Admissions ──────────────────────────────────────────────────────
-export async function getOwnerAdmissions(token: string) {
-  const res = await fetch(`${EDU_API}/api/owner/admissions`, { headers: ownerHeaders(token) });
-  return res.json();
+export async function getOwnerAdmissions(_token: string) {
+  // Query Supabase directly — bypasses backend cache so deletes reflect immediately
+  const { data, error } = await supabase
+    .from("enquiries")
+    .select("id,child_name,parent_name,phone,program_label,section_name,status,created_at,section_id,program_id")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  // Map to the field names the UI expects
+  return {
+    enquiries: (data ?? []).map((e: any) => ({
+      ...e,
+      programme: e.program_label,
+      section:   e.section_name,
+    })),
+  };
+}
+export async function deleteEnquiryRecord(_token: string, id: string) {
+  // Verify the record exists first
+  const { data: existing } = await supabase.from("enquiries").select("id").eq("id", id).maybeSingle();
+  if (!existing) throw new Error(`No enquiry found with id: ${id}`);
+
+  // Delete related records (ignore errors if tables don't exist)
+  await supabase.from("attendance").delete().eq("enquiry_id", id);
+  await supabase.from("fee_assignments").delete().eq("enquiry_id", id);
+  await supabase.from("kit_assignments").delete().eq("enquiry_id", id);
+  await supabase.from("medical_records").delete().eq("enquiry_id", id);
+  await supabase.from("pickup_authorizations").delete().eq("enquiry_id", id);
+  await supabase.from("documents").delete().eq("enquiry_id", id);
+
+  // Delete the enquiry itself — use select() to confirm it was deleted
+  const { data: deleted, error } = await supabase
+    .from("enquiries")
+    .delete()
+    .eq("id", id)
+    .select("id");
+
+  if (error) throw new Error(`Supabase error: ${error.message}`);
+
+  // If no rows returned, RLS silently blocked the delete
+  if (!deleted || deleted.length === 0) {
+    throw new Error(
+      "RLS policy blocked the delete.\n\nFix: Go to Supabase Dashboard → Table Editor → enquiries → Policies → Add DELETE policy for anon or authenticated role."
+    );
+  }
+
+  return { success: true };
 }
 
 // ── Owner: Fees ────────────────────────────────────────────────────────────

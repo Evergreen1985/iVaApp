@@ -73,13 +73,22 @@ export default function LoginScreen() {
     const data = await parentFirstLogin(cleanPhone(), dob, last4);
     setBusy(false);
     if (data.error) { Alert.alert("Error", data.error); return; }
-    Alert.alert(t("success"), t("firstLoginSuccess"));
-    await setSession({
-      role: "parent", phone: cleanPhone(),
-      name: data.childName || "", children: [],
-      loginTime: Date.now(),
-    });
-    router.replace("/(main)/parent/home");
+    const msg = data.autoPass
+      ? `Account setup complete!\n\n🔑 Your password: ${data.autoPass}\n\n📱 Save this password — you'll need it every time you log in.\n\nThis was also sent to your WhatsApp.`
+      : "Account setup complete! Check WhatsApp for your login password.";
+    Alert.alert("✅ Setup Complete", msg, [
+      {
+        text: "Continue →",
+        onPress: async () => {
+          await setSession({
+            role: "parent", phone: cleanPhone(),
+            name: data.childName || "", children: [],
+            loginTime: Date.now(),
+          });
+          router.replace("/(main)/parent/home");
+        },
+      },
+    ]);
   };
 
   // ── Parent: send reset OTP ──────────────────────────────────────────────
@@ -268,9 +277,19 @@ export default function LoginScreen() {
             </TouchableOpacity>
             <Text style={s.title}>{t("firstTimeSetup")}</Text>
             <Text style={s.sub}>{t("firstTimeDesc")}</Text>
+
+            {/* DOB hint box */}
+            <View style={s.hintBox}>
+              <Text style={s.hintText}>
+                📅 Enter child's date of birth{"\n"}
+                Format: <Text style={{ fontWeight: "800" }}>DD/MM/YYYY</Text>
+                {"  "}e.g. <Text style={{ fontWeight: "700" }}>25/12/2020</Text>
+              </Text>
+            </View>
+
             <TextInput
               style={s.input}
-              placeholder={t("dobPlaceholder")}
+              placeholder="DD/MM/YYYY"
               placeholderTextColor={COLORS.mid}
               keyboardType="numbers-and-punctuation"
               value={dob}
@@ -467,4 +486,7 @@ const s = StyleSheet.create({
   btnTxt:       { color: "#fff", fontSize: 16, fontWeight: "700" },
   linkRow:      { marginTop: 14, alignItems: "center" },
   linkTxt:      { color: COLORS.edu, fontWeight: "600", fontSize: 13 },
+  hintBox:      { backgroundColor: "#FFF8E1", borderRadius: 10, padding: 12, marginBottom: 12,
+                  borderWidth: 1, borderColor: "#FFE082" },
+  hintText:     { fontSize: 13, color: "#795548", lineHeight: 20 },
 });
