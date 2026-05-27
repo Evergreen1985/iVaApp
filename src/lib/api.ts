@@ -188,12 +188,12 @@ export async function getCalendar(month: string) {
 }
 
 export async function getFeeDues(enquiryId: string) {
+  // Fetch ALL fee statuses so the screen can show both pending dues AND paid receipts
   const { data, error } = await supabase
     .from("fee_assignments")
-    .select("*, fee_structures(name, fee_type)")
+    .select("id,amount,due_date,status,period_label,receipt_no,paid_at,paid_amount,payment_mode,discount_amount,notes,fee_structure_id,fee_structures(name,fee_type)")
     .eq("enquiry_id", enquiryId)
-    .in("status", ["pending", "overdue"])
-    .order("due_date", { ascending: true });
+    .order("due_date", { ascending: false });
   if (error) throw new Error(error.message);
   return data || [];
 }
