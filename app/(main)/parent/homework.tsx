@@ -6,35 +6,43 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { COLORS } from "../../../src/lib/constants";
-import { getParentDashboard } from "../../../src/lib/api";
+import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
 import { useRealtime } from "../../../src/lib/realtime";
 
 export default function ParentHomework() {
   const { t } = useTranslation();
-  const { session, activeChild } = useSession();
-  const [allItems, setAllItems] = useState<any[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [refresh, setRefresh]   = useState(false);
+  const { activeChild } = useSession();
+  const [items, setItems]     = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(false);
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
     try {
-      if (session?.phone) {
-        const res = await getParentDashboard(session.phone);
-        setAllItems(res?.homework || []);
+      const sectionId = activeChild?.section_id;
+      if (sectionId) {
+        // Query Supabase directly — last 60 days, no due_date filter so
+        // homework without a due date also appears
+        const since = new Date();
+        since.setDate(since.getDate() - 60);
+        const { data } = await supabase
+          .from("homework")
+          .select("*")
+          .eq("section_id", sectionId)
+          .gte("created_at", since.toISOString())
+          .order("created_at", { ascending: false })
+          .limit(50);
+        setItems(data || []);
+      } else {
+        setItems([]);
       }
-    } catch {}
+    } catch { setItems([]); }
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [activeChild?.section_id]);
   useRealtime("homework", () => load());
-
-  // Filter to active child's section only
-  const items = activeChild?.section_id
-    ? allItems.filter((h: any) => h.section_id === activeChild.section_id)
-    : allItems;
 
   if (loading) {
     return <View style={s.center}><ActivityIndicator size="large" color={COLORS.edu} /></View>;
