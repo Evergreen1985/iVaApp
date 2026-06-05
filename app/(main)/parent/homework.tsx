@@ -9,44 +9,55 @@ import { COLORS } from "../../../src/lib/constants";
 import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
 import { useRealtime } from "../../../src/lib/realtime";
+import ParentHomeworkCard from "../../../src/components/ParentHomeworkCard";
 
 export default function ParentHomework() {
   const { t } = useTranslation();
   const { activeChild } = useSession();
-  const [items, setItems]     = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refresh, setRefresh] = useState(false);
+  const [items, setItems]       = useState<any[]>([]);
+  const [statusMap, setStatus]  = useState<Record<string, any>>({});
+  const [loading, setLoading]   = useState(true);
+  const [refresh, setRefresh]   = useState(false);
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
     try {
       const sectionId = activeChild?.section_id;
+      const childId   = activeChild?.id;
       if (sectionId) {
-        // Query Supabase directly — last 60 days, no due_date filter so
-        // homework without a due date also appears
-        const since = new Date();
-        since.setDate(since.getDate() - 60);
-        const { data } = await supabase
-          .from("homework")
-          .select("*")
+        const since = new Date(); since.setDate(since.getDate() - 60);
+        const { data: hw } = await supabase
+          .from("homework").select("*")
           .eq("section_id", sectionId)
           .gte("created_at", since.toISOString())
           .order("created_at", { ascending: false })
           .limit(50);
-        setItems(data || []);
+        setItems(hw || []);
+
+        // per-child status / doubts
+        if (childId) {
+          const { data: st } = await supabase
+            .from("homework_status").select("*").eq("enquiry_id", childId);
+          const map: Record<string, any> = {};
+          (st || []).forEach((r: any) => { map[r.homework_id] = r; });
+          setStatus(map);
+        }
       } else {
-        setItems([]);
+        setItems([]); setStatus({});
       }
     } catch { setItems([]); }
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
 
-  useEffect(() => { load(); }, [activeChild?.section_id]);
+  useEffect(() => { load(); }, [activeChild?.section_id, activeChild?.id]);
   useRealtime("homework", () => load());
+  useRealtime("homework_status", () => load());
 
   if (loading) {
     return <View style={s.center}><ActivityIndicator size="large" color={COLORS.edu} /></View>;
   }
+
+  const pendingCount = items.filter((h) => statusMap[h.id]?.status !== "done").length;
 
   return (
     <ScrollView
@@ -56,20 +67,24 @@ export default function ParentHomework() {
     >
       <Text style={s.pageTitle}>{t("homework")}</Text>
 
-      {/* Active child banner */}
       {activeChild && (
         <View style={s.childBanner}>
           {activeChild.photo_url ? (
             <Image source={{ uri: activeChild.photo_url }} style={s.bannerPhoto} />
           ) : (
-            <View style={s.bannerAvt}>
-              <Text style={s.bannerAvtTxt}>{(activeChild.name || "?")[0].toUpperCase()}</Text>
-            </View>
+            <View style={s.bannerAvt}><Text style={s.bannerAvtTxt}>{(activeChild.name || "?")[0].toUpperCase()}</Text></View>
           )}
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={s.bannerName}>{activeChild.name}</Text>
             <Text style={s.bannerClass}>{activeChild.class}</Text>
           </View>
+          {items.length > 0 && (
+            <View style={[s.pendPill, pendingCount === 0 && s.pendPillDone]}>
+              <Text style={[s.pendTxt, pendingCount === 0 && { color: COLORS.success }]}>
+                {pendingCount === 0 ? "All done 🎉" : `${pendingCount} pending`}
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -79,23 +94,15 @@ export default function ParentHomework() {
           <Text style={s.emptyTxt}>{t("noHomework")}</Text>
         </View>
       ) : (
-        items.map((hw: any, i: number) => (
-          <View key={i} style={s.card}>
-            <View style={s.cardTop}>
-              <View style={s.subjectPill}>
-                <Text style={s.subjectTxt}>{hw.subject || "General"}</Text>
-              </View>
-              {(hw.dueDate || hw.due_date) && (
-                <Text style={s.dueDate}>
-                  Due {new Date(hw.dueDate || hw.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                </Text>
-              )}
-            </View>
-            <Text style={s.hwTitle}>{hw.title || hw.description}</Text>
-            {hw.description && hw.title && (
-              <Text style={s.hwDesc}>{hw.description}</Text>
-            )}
-          </View>
+        items.map((hw: any) => (
+          <ParentHomeworkCard
+            key={hw.id}
+            hw={hw}
+            statusRow={statusMap[hw.id] || null}
+            childId={activeChild?.id}
+            childName={activeChild?.name || ""}
+            onChanged={() => load(true)}
+          />
         ))
       )}
     </ScrollView>
@@ -107,21 +114,15 @@ const s = StyleSheet.create({
   content:     { padding: 20, paddingBottom: 40 },
   center:      { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: COLORS.bg },
   pageTitle:   { fontSize: 22, fontWeight: "800", color: COLORS.dark, marginBottom: 16 },
-
   childBanner: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.eduLight, borderRadius: 14, padding: 12, marginBottom: 20, gap: 12, borderWidth: 1, borderColor: COLORS.edu + "40" },
   bannerPhoto: { width: 40, height: 40, borderRadius: 20 },
   bannerAvt:   { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.edu, alignItems: "center", justifyContent: "center" },
   bannerAvtTxt:{ fontSize: 16, fontWeight: "800", color: "#fff" },
   bannerName:  { fontSize: 14, fontWeight: "800", color: COLORS.dark },
   bannerClass: { fontSize: 12, color: COLORS.mid, marginTop: 1 },
-
-  card:        { backgroundColor: "#fff", borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: COLORS.border },
-  cardTop:     { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  subjectPill: { backgroundColor: COLORS.eduLight, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  subjectTxt:  { fontSize: 12, fontWeight: "700", color: COLORS.edu },
-  dueDate:     { fontSize: 12, color: COLORS.orange, fontWeight: "600" },
-  hwTitle:     { fontSize: 15, fontWeight: "700", color: COLORS.dark, lineHeight: 22 },
-  hwDesc:      { fontSize: 13, color: COLORS.mid, marginTop: 6, lineHeight: 19 },
+  pendPill:    { backgroundColor: "#FEF3C7", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  pendPillDone:{ backgroundColor: COLORS.success + "22" },
+  pendTxt:     { fontSize: 12, fontWeight: "800", color: "#92400E" },
   emptyCard:   { alignItems: "center", padding: 40, backgroundColor: "#fff", borderRadius: 20, borderWidth: 1, borderColor: COLORS.border, marginTop: 40 },
   emptyTxt:    { fontSize: 14, color: COLORS.mid, marginTop: 10 },
 });

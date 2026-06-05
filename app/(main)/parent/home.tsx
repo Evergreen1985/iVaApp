@@ -13,6 +13,8 @@ import { getParentDashboard, getAudioOverviews } from "../../../src/lib/api";
 import { registerPushToken } from "../../../src/lib/notifications";
 import { useSession } from "../../../src/store/session";
 import { useRealtime } from "../../../src/lib/realtime";
+import AudioButton from "../../../src/components/AudioButton";
+import { useSeen } from "../../../src/store/seen";
 
 const ALL_ACTIVITIES = [
   { label: "Homework",    icon: "book-outline",            route: "/(main)/parent/homework",  color: COLORS.edu },
@@ -30,10 +32,24 @@ const ALL_ACTIVITIES = [
   { label: "Profile",     icon: "person-outline",          route: "/(main)/parent/profile",   color: COLORS.mid },
 ];
 
+// Deterministic uuid-shaped id from a string — cache key for the calendar digest
+function hashToUuid(str: string): string {
+  const h = [0x811c9dc5, 0x811c9dc5, 0x811c9dc5, 0x811c9dc5];
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    for (let k = 0; k < 4; k++) { h[k] ^= c + i * (k + 1); h[k] = Math.imul(h[k], 16777619) >>> 0; }
+  }
+  const hex = h.map((x) => (x >>> 0).toString(16).padStart(8, "0")).join("");
+  return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20,32)}`;
+}
+
 export default function ParentHome() {
   const router = useRouter();
   const { t, i18n } = useTranslation();          // i18n here is reactive
   const { session, clearSession, setActiveChild } = useSession();
+  const seen     = useSeen((st) => st.seen);
+  const markSeen = useSeen((st) => st.markSeen);
+  const loadSeen = useSeen((st) => st.load);
   const token = session?.token || "";
   const lang  = i18n.language || "en";
 
@@ -43,6 +59,11 @@ export default function ParentHome() {
   const [refresh, setRefresh]     = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [selectedIdx, setSelectedIdx] = useState(0);
+  const [audioExpanded, setAudioExpanded] = useState(false);
+  const [audioLimit, setAudioLimit]       = useState(10);
+  const [annExpanded, setAnnExpanded]     = useState(false);
+  const [annLimit, setAnnLimit]           = useState(10);
+  const [hwDoneIds, setHwDoneIds]         = useState<Record<string, boolean>>({});
 
   // Ref so cleanup/logout always holds the live sound, never stale null
   const soundRef    = useRef<Audio.Sound | null>(null);
@@ -78,6 +99,7 @@ export default function ParentHome() {
   // On mount: full load + push token; cleanup stops audio on unmount
   useEffect(() => {
     load();
+    loadSeen();
     if (session?.phone) registerPushToken(session.phone);
     return () => { stopSound(); };
   }, []);
@@ -193,9 +215,22 @@ export default function ParentHome() {
     if (activeChild) setActiveChild(activeChild);
   }, [activeChild?.section_id, activeChild?.name]);
 
+  // Which homework this child has already marked done (for the pending count)
+  useEffect(() => {
+    const cid = activeChild?.id;
+    if (!cid) { setHwDoneIds({}); return; }
+    supabase.from("homework_status").select("homework_id").eq("enquiry_id", cid).eq("status", "done")
+      .then(({ data: d }) => {
+        const m: Record<string, boolean> = {};
+        (d || []).forEach((r: any) => { m[r.homework_id] = true; });
+        setHwDoneIds(m);
+      });
+  }, [activeChild?.id]);
+
   const activeHomework: any[] = (data?.homework || []).filter(
     (h: any) => h.section_id && h.section_id === activeChild?.section_id
   );
+  const hwPending = activeHomework.filter((h: any) => !hwDoneIds[h.id]).length;
 
   // ── Upcoming events (reuses calendarEvents the dashboard already fetched) ──
   const nowDate  = new Date();
@@ -225,6 +260,19 @@ export default function ParentHome() {
     if (d === tomStr)   return "Tomorrow";
     return new Date(d + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
   };
+
+  // Audio overviews list: collapsed shows latest 2 — unless the most recent day has
+  // more than 2 (then show all of that day). "View all" → 10, "Show more" → +10.
+  const audioLatestDay      = audios[0] ? (audios[0].created_at || "").slice(0, 10) : "";
+  const audioLatestDayCount = audios.filter((a: any) => (a.created_at || "").slice(0, 10) === audioLatestDay).length;
+  const audioCollapsedCount = audioLatestDayCount > 2 ? audioLatestDayCount : 2;
+  const visibleAudios       = audioExpanded ? audios.slice(0, audioLimit) : audios.slice(0, audioCollapsedCount);
+
+  // Announcements: same pagination rule as audio overviews
+  const annLatestDay        = announcements[0] ? (announcements[0].created_at || "").slice(0, 10) : "";
+  const annLatestDayCount   = announcements.filter((a: any) => (a.created_at || "").slice(0, 10) === annLatestDay).length;
+  const annCollapsedCount   = annLatestDayCount > 2 ? annLatestDayCount : 2;
+  const visibleAnnouncements = annExpanded ? announcements.slice(0, annLimit) : announcements.slice(0, annCollapsedCount);
 
   if (loading) return <View style={s.center}><ActivityIndicator size="large" color={COLORS.edu} /></View>;
 
@@ -260,25 +308,81 @@ export default function ParentHome() {
         </View>
       </View>
 
-      {/* ── Active child card ── */}
+      {/* ── Active child (70%) + Ask iVa (30%) ── */}
       {activeChild && (
-        <View style={[s.activeChildCard, { marginBottom: 20 }]}>
-          {activeChild.photo_url ? (
-            <Image source={{ uri: activeChild.photo_url }} style={s.activeChildPhoto} />
-          ) : (
-            <View style={s.activeChildAvt}>
-              <Text style={s.activeChildAvtTxt}>{(activeChild.name || "?")[0].toUpperCase()}</Text>
+        <View style={s.heroRow}>
+          <View style={[s.activeChildCard, s.heroChild]}>
+            {activeChild.photo_url ? (
+              <Image source={{ uri: activeChild.photo_url }} style={s.activeChildPhoto} />
+            ) : (
+              <View style={s.activeChildAvt}>
+                <Text style={s.activeChildAvtTxt}>{(activeChild.name || "?")[0].toUpperCase()}</Text>
+              </View>
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={s.activeChildName} numberOfLines={1}>{activeChild.name}</Text>
+              <Text style={s.activeChildClass} numberOfLines={1}>{activeChild.class}</Text>
+              {activeChild.todayAttendance && (
+                <View style={[s.badge, { alignSelf: "flex-start", marginTop: 6, backgroundColor: activeChild.todayAttendance === "present" ? COLORS.eduLight : "#FEE2E2" }]}>
+                  <Text style={[s.badgeTxt, { color: activeChild.todayAttendance === "present" ? COLORS.edu : COLORS.error }]}>
+                    {activeChild.todayAttendance === "present" ? t("present") : t("absent")}
+                  </Text>
+                </View>
+              )}
             </View>
-          )}
-          <View style={{ flex: 1 }}>
-            <Text style={s.activeChildName}>{activeChild.name}</Text>
-            <Text style={s.activeChildClass}>{activeChild.class}</Text>
           </View>
-          {activeChild.todayAttendance && (
-            <View style={[s.badge, { backgroundColor: activeChild.todayAttendance === "present" ? COLORS.eduLight : "#FEE2E2" }]}>
-              <Text style={[s.badgeTxt, { color: activeChild.todayAttendance === "present" ? COLORS.edu : COLORS.error }]}>
-                {activeChild.todayAttendance === "present" ? t("present") : t("absent")}
-              </Text>
+
+          <TouchableOpacity style={s.heroAgent} activeOpacity={0.85}
+            onPress={() => router.push("/(main)/parent/ask" as any)}>
+            <View style={s.heroAgentIcon}>
+              <Ionicons name="sparkles" size={20} color="#7C3AED" />
+            </View>
+            <Text style={s.heroAgentTitle}>{t("askAgent") || "Ask iVa"}</Text>
+            <Text style={s.heroAgentSub} numberOfLines={1}>Tap to ask</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── Announcements (moved up · latest 2 / view all) ── */}
+      {announcements.length > 0 && (
+        <View style={s.section}>
+          <Text style={[s.sectionTitle, { marginBottom: 12 }]}>{t("announcements")}</Text>
+          {visibleAnnouncements.map((ann: any, i: number) => (
+            <TouchableOpacity key={ann.id || i} style={[s.annCard, seen[ann.id] && s.seenCard]}
+              activeOpacity={0.85} onPress={() => markSeen(ann.id)}>
+              <View style={s.annDot} />
+              <View style={{ flex: 1 }}>
+                <Text style={s.annTitle}>{ann.title || ann.message}</Text>
+                {ann.body && <Text style={s.annBody} numberOfLines={4}>{ann.body}</Text>}
+                {(ann.date || ann.created_at) && <Text style={s.annDate}>{new Date(ann.date || ann.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</Text>}
+                {ann.id && (
+                  <View style={{ marginTop: 10 }}>
+                    <AudioButton
+                      sourceType="announcement"
+                      sourceId={String(ann.id)}
+                      title={ann.title || "Announcement"}
+                      content={`${ann.title || ""}. ${ann.body || ann.message || ""}`.trim()}
+                    />
+                  </View>
+                )}
+              </View>
+            </TouchableOpacity>
+          ))}
+          {!annExpanded && announcements.length > annCollapsedCount && (
+            <TouchableOpacity style={s.audioMore} onPress={() => { setAnnExpanded(true); setAnnLimit(10); }}>
+              <Text style={s.audioMoreTxt}>View all ({announcements.length}) →</Text>
+            </TouchableOpacity>
+          )}
+          {annExpanded && (
+            <View style={s.audioMoreRow}>
+              {annLimit < announcements.length && (
+                <TouchableOpacity style={s.audioMore} onPress={() => setAnnLimit((n) => n + 10)}>
+                  <Text style={s.audioMoreTxt}>Show more</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={s.audioMore} onPress={() => { setAnnExpanded(false); setAnnLimit(10); }}>
+                <Text style={[s.audioMoreTxt, { color: COLORS.mid }]}>Show less</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -295,69 +399,55 @@ export default function ParentHome() {
             <Ionicons name="headset-outline" size={32} color={COLORS.mid} />
             <Text style={s.audioEmptyTxt}>{t("noAudio")}</Text>
           </View>
-        ) : audios.map((item, i) => {
-          const isPlaying = playingId === item.id;
-          return (
-            <View key={item.id || i} style={[s.audioCard, isPlaying && s.audioCardActive]}>
-              <TouchableOpacity style={[s.playCircle, isPlaying && s.playCircleActive]} onPress={() => handlePlay(item)}>
-                <Ionicons name={isPlaying ? "pause" : "play"} size={20} color={isPlaying ? "#fff" : COLORS.edu} />
-              </TouchableOpacity>
-              <View style={{ flex: 1 }}>
-                <Text style={s.audioTitle}>{item.title || `Overview ${i + 1}`}</Text>
-                {item.description && <Text style={s.audioDesc} numberOfLines={1}>{item.description}</Text>}
-                {item.duration && <Text style={s.audioDur}>{item.duration}</Text>}
-              </View>
-              {isPlaying && (
-                <View style={s.waveContainer}>
-                  {[1,2,3,4,3,2,1].map((h, wi) => (
-                    <View key={wi} style={[s.wavebar, { height: h * 4 + 4 }]} />
-                  ))}
-                </View>
-              )}
+        ) : visibleAudios.map((item, i) => (
+          <View key={item.id || i} style={[s.audioCard, s.audioCardCol, seen[item.id] && s.seenCard]}>
+            <View style={{ marginBottom: 8 }}>
+              <Text style={s.audioTitle}>{item.title || `Overview ${i + 1}`}</Text>
+              {item.description && <Text style={s.audioDesc} numberOfLines={1}>{item.description}</Text>}
             </View>
-          );
-        })}
+            <AudioButton
+              title={item.title || `Overview ${i + 1}`}
+              directUrl={item.audio_url}
+              onStart={() => markSeen(item.id)}
+            />
+          </View>
+        ))}
+
+        {/* View all / Show more controls */}
+        {!audioExpanded && audios.length > audioCollapsedCount && (
+          <TouchableOpacity style={s.audioMore} onPress={() => { setAudioExpanded(true); setAudioLimit(10); }}>
+            <Text style={s.audioMoreTxt}>View all ({audios.length}) →</Text>
+          </TouchableOpacity>
+        )}
+        {audioExpanded && (
+          <View style={s.audioMoreRow}>
+            {audioLimit < audios.length && (
+              <TouchableOpacity style={s.audioMore} onPress={() => setAudioLimit((n) => n + 10)}>
+                <Text style={s.audioMoreTxt}>Show more</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={s.audioMore} onPress={() => { setAudioExpanded(false); setAudioLimit(10); }}>
+              <Text style={[s.audioMoreTxt, { color: COLORS.mid }]}>Show less</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
-      {/* ── AI Agent ── */}
-      <TouchableOpacity style={s.agentCard} onPress={() => router.push("/(main)/parent/ask" as any)} activeOpacity={0.85}>
-        <View style={s.agentIconBox}>
-          <Ionicons name="sparkles" size={22} color="#7C3AED" />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={s.agentTitle}>{t("askAgent") || "Ask iVa"}</Text>
-          <Text style={s.agentDesc}>{t("agentDesc") || "Need help navigating? Ask me anything about fees, homework, events..."}</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color={COLORS.mid} />
-      </TouchableOpacity>
-
-      {/* ── Homework preview ── */}
+      {/* ── Homework pending → Homework tab ── */}
       {activeHomework.length > 0 && (
-        <View style={s.section}>
-          <Text style={[s.sectionTitle, { marginBottom: 8 }]}>Upcoming Homework</Text>
-          {activeHomework.slice(0, 2).map((hw: any, i: number) => (
-            <TouchableOpacity key={i} style={s.hwCard}
-              onPress={() => router.push("/(main)/parent/homework" as any)} activeOpacity={0.8}>
-              <View style={s.hwDot} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.hwSubject}>{hw.subject || hw.title || "Homework"}</Text>
-                {(hw.description || hw.content) && (
-                  <Text style={s.hwDesc} numberOfLines={1}>{hw.description || hw.content}</Text>
-                )}
-              </View>
-              {hw.due_date && (
-                <Text style={s.hwDue}>
-                  {new Date(hw.due_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                </Text>
-              )}
-            </TouchableOpacity>
-          ))}
-          {activeHomework.length > 2 && (
-            <TouchableOpacity style={s.hwMore} onPress={() => router.push("/(main)/parent/homework" as any)}>
-              <Text style={s.hwMoreTxt}>+{activeHomework.length - 2} more assignments →</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <TouchableOpacity style={s.hwPendingCard} activeOpacity={0.85}
+          onPress={() => router.push("/(main)/parent/homework" as any)}>
+          <View style={[s.hwPendingIcon, hwPending === 0 && { backgroundColor: COLORS.success + "18" }]}>
+            <Ionicons name={hwPending === 0 ? "checkmark-done" : "book"} size={22} color={hwPending === 0 ? COLORS.success : COLORS.edu} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.hwPendingTitle}>
+              {hwPending === 0 ? "Homework — all done 🎉" : `${hwPending} homework pending`}
+            </Text>
+            <Text style={s.hwPendingSub}>Tap to view, update status & ask doubts</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.mid} />
+        </TouchableOpacity>
       )}
 
       {/* ── Upcoming Events ── */}
@@ -369,11 +459,19 @@ export default function ParentHome() {
               <Text style={s.viewAll}>View all →</Text>
             </TouchableOpacity>
           </View>
+          <View style={{ marginBottom: 10 }}>
+            <AudioButton
+              sourceType="custom"
+              sourceId={hashToUuid(upcomingEvents.map((e: any) => `${e.id || e.event_date}:${e.title}`).join("|"))}
+              title="Upcoming Events"
+              content={"Upcoming events at Evergreen Preschool. " + upcomingEvents.map((e: any) => `${e.title} on ${eventDateLabel(e.event_date)}.`).join(" ")}
+            />
+          </View>
           {upcomingEvents.map((ev: any, i: number) => {
             const m = eventMeta(ev.event_type);
             return (
-              <TouchableOpacity key={ev.id || i} style={s.evCard} activeOpacity={0.8}
-                onPress={() => router.push("/(main)/parent/calendar" as any)}>
+              <TouchableOpacity key={ev.id || i} style={[s.evCard, seen[ev.id] && s.seenCard]} activeOpacity={0.8}
+                onPress={() => { markSeen(ev.id); router.push({ pathname: "/(main)/parent/calendar", params: { date: (ev.event_date || "").slice(0, 10) } } as any); }}>
                 <View style={[s.evIcon, { backgroundColor: m.color + "18" }]}>
                   <Ionicons name={m.icon as any} size={20} color={m.color} />
                 </View>
@@ -408,21 +506,6 @@ export default function ParentHome() {
         </View>
       </View>
 
-      {/* ── Announcements ── */}
-      {announcements.length > 0 && (
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>{t("announcements")}</Text>
-          {announcements.map((ann: any, i: number) => (
-            <View key={i} style={s.annCard}>
-              <View style={s.annDot} />
-              <View style={{ flex: 1 }}>
-                <Text style={s.annTitle}>{ann.title || ann.message}</Text>
-                {ann.date && <Text style={s.annDate}>{new Date(ann.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</Text>}
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
     </ScrollView>
 
     {/* ── Dancing Community Bubble ── */}
@@ -473,6 +556,7 @@ const s = StyleSheet.create({
   audioEmpty:     { alignItems: "center", gap: 8, paddingVertical: 24, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: COLORS.border },
   audioEmptyTxt:  { fontSize: 13, color: COLORS.mid },
   audioCard:      { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#fff", borderRadius: 16, padding: 14, borderWidth: 1, borderColor: COLORS.border, marginBottom: 10 },
+  audioCardCol:   { flexDirection: "column", alignItems: "stretch", gap: 0 },
   audioCardActive:{ borderColor: COLORS.edu, borderWidth: 2 },
   playCircle:     { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.eduLight, alignItems: "center", justifyContent: "center" },
   playCircleActive:{ backgroundColor: COLORS.edu },
@@ -481,12 +565,20 @@ const s = StyleSheet.create({
   audioDur:       { fontSize: 11, color: COLORS.mid, marginTop: 2 },
   waveContainer:  { flexDirection: "row", alignItems: "center", gap: 2 },
   wavebar:        { width: 3, borderRadius: 2, backgroundColor: COLORS.edu },
+  audioMore:      { alignItems: "center", paddingVertical: 8, paddingHorizontal: 12 },
+  audioMoreTxt:   { fontSize: 13, color: COLORS.edu, fontWeight: "700" },
+  audioMoreRow:   { flexDirection: "row", justifyContent: "center", gap: 16 },
 
-  // Agent
-  agentCard:      { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#7C3AED12", borderRadius: 18, padding: 16, borderWidth: 1, borderColor: "#7C3AED30", marginBottom: 24 },
-  agentIconBox:   { width: 48, height: 48, borderRadius: 16, backgroundColor: "#7C3AED18", alignItems: "center", justifyContent: "center" },
-  agentTitle:     { fontSize: 15, fontWeight: "800", color: COLORS.dark },
-  agentDesc:      { fontSize: 12, color: COLORS.mid, marginTop: 3, lineHeight: 18 },
+  // Hero row: active child (70%) + Ask iVa (30%)
+  heroRow:        { flexDirection: "row", gap: 12, marginBottom: 20, alignItems: "stretch" },
+  heroChild:      { flex: 0.7, marginBottom: 0 },
+  heroAgent:      { flex: 0.3, backgroundColor: "#7C3AED12", borderRadius: 16, borderWidth: 1, borderColor: "#7C3AED30", alignItems: "center", justifyContent: "center", padding: 10, gap: 6 },
+  heroAgentIcon:  { width: 40, height: 40, borderRadius: 13, backgroundColor: "#7C3AED18", alignItems: "center", justifyContent: "center" },
+  heroAgentTitle: { fontSize: 12, fontWeight: "800", color: "#7C3AED", textAlign: "center" },
+  heroAgentSub:   { fontSize: 10, color: "#7C3AED", opacity: 0.7, textAlign: "center" },
+
+  // Already-viewed (seen) items are dimmed to a muted state
+  seenCard:       { opacity: 0.5 },
 
   // Active child card
   activeChildCard:   { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: COLORS.edu },
@@ -500,12 +592,18 @@ const s = StyleSheet.create({
 
   // Homework preview
   hwCard:    { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 12, padding: 12, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8, gap: 10 },
+  hwCardCol: { flexDirection: "column", alignItems: "stretch", gap: 0 },
+  hwTopRow:  { flexDirection: "row", alignItems: "center", gap: 10 },
   hwDot:     { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.edu },
   hwSubject: { fontSize: 13, fontWeight: "700", color: COLORS.dark },
   hwDesc:    { fontSize: 11, color: COLORS.mid, marginTop: 2 },
   hwDue:     { fontSize: 11, color: COLORS.orange, fontWeight: "700" },
   hwMore:    { alignItems: "center", paddingVertical: 4 },
   hwMoreTxt: { fontSize: 12, color: COLORS.edu, fontWeight: "600" },
+  hwPendingCard:  { flexDirection: "row", alignItems: "center", gap: 14, backgroundColor: "#fff", borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border, marginBottom: 24 },
+  hwPendingIcon:  { width: 46, height: 46, borderRadius: 14, backgroundColor: COLORS.eduLight, alignItems: "center", justifyContent: "center" },
+  hwPendingTitle: { fontSize: 15, fontWeight: "800", color: COLORS.dark },
+  hwPendingSub:   { fontSize: 12, color: COLORS.mid, marginTop: 3 },
 
   // Upcoming events
   sectionRowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
@@ -527,6 +625,7 @@ const s = StyleSheet.create({
   annCard:        { flexDirection: "row", alignItems: "flex-start", backgroundColor: "#fff", borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: COLORS.border },
   annDot:         { width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.edu, marginTop: 5, marginRight: 12 },
   annTitle:       { fontSize: 14, fontWeight: "600", color: COLORS.dark, lineHeight: 20 },
+  annBody:        { fontSize: 12, color: COLORS.mid, marginTop: 4, lineHeight: 18 },
   annDate:        { fontSize: 11, color: COLORS.mid, marginTop: 3 },
 
   // Community dancing bubble

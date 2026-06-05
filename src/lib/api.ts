@@ -136,7 +136,6 @@ export async function getParentDashboard(phone: string) {
   const phoneP12 = `+91${phone10}`;
 
   const now     = new Date();
-  const month   = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   // Rolling window for upcoming calendar events: today → +45 days (was: current month only)
   const ymd = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -166,12 +165,13 @@ export async function getParentDashboard(phone: string) {
   const sectionIds = (enquiries || []).map((e: any) => e.section_id).filter(Boolean);
   let homework: any[] = [];
   if (sectionIds.length > 0) {
+    // Show all homework for the child's section(s), newest first — do NOT require a
+    // due_date (homework posted without one must still appear).
     const { data: hw } = await supabase
       .from("homework")
       .select("*")
       .in("section_id", sectionIds)
-      .gte("due_date", `${month}-01`)
-      .order("due_date");
+      .order("created_at", { ascending: false });
     homework = hw || [];
   }
 
@@ -373,6 +373,22 @@ export async function getAudioOverviews(_token?: string, lang?: string) {
   if (lang) url += `&language=eq.${lang}`;
   const res = await fetch(url, {
     headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${SUPABASE_ANON}` },
+  });
+  return res.json();
+}
+
+// On-demand audio for a single item (announcement / calendar digest) in one language.
+// Returns { status: "ready"|"generating"|"failed", audio_url?, ... }.
+// The backend caches by (sourceType, sourceId, language) — a language is only ever
+// generated the first time some parent requests it, then reused for everyone.
+export async function getItemAudio(payload: {
+  sourceType: string; sourceId: string; title: string; content: string; language: string;
+  keepEnglish?: string;
+}) {
+  const res = await fetch(`${EDU_API}/api/audio/for`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
   return res.json();
 }

@@ -8,6 +8,8 @@ import { COLORS } from "../../../src/lib/constants";
 import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
 import { useRealtime } from "../../../src/lib/realtime";
+import { pickImageOrVideo, uploadToBucket } from "../../../src/lib/uploads";
+import TeacherHomeworkCard from "../../../src/components/TeacherHomeworkCard";
 
 const SUBJECTS = ["English", "Hindi", "Maths", "Science", "EVS", "Drawing", "GK", "Other"];
 
@@ -22,8 +24,18 @@ export default function TeacherHomework() {
   const [title, setTitle]       = useState("");
   const [desc, setDesc]         = useState("");
   const [dueDate, setDueDate]   = useState("");
+  const [keywords, setKeywords] = useState("");
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [statusByHw, setStatusByHw]   = useState<Record<string, any[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
+
+  const addAttachment = async () => {
+    const picked = await pickImageOrVideo();
+    if (!picked) return;
+    const url = await uploadToBucket("homework-files", "teacher", picked);
+    if (url) setAttachments((a) => [...a, { url, name: picked.name, type: picked.kind }]);
+  };
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
@@ -36,6 +48,13 @@ export default function TeacherHomework() {
           .order("created_at", { ascending: false })
           .limit(50);
         setList(data || []);
+        const ids = (data || []).map((h: any) => h.id);
+        if (ids.length) {
+          const { data: st } = await supabase.from("homework_status").select("*").in("homework_id", ids);
+          const map: Record<string, any[]> = {};
+          (st || []).forEach((r: any) => { (map[r.homework_id] ??= []).push(r); });
+          setStatusByHw(map);
+        } else { setStatusByHw({}); }
       }
     } catch {}
     if (isRefresh) setRefresh(false); else setLoading(false);
@@ -43,21 +62,29 @@ export default function TeacherHomework() {
 
   useEffect(() => { load(); }, []);
   useRealtime("homework", () => load());
+  useRealtime("homework_status", () => load());
 
   const handleSubmit = async () => {
     if (!title.trim()) { Alert.alert("Enter a title"); return; }
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("homework").insert({
+      const base: any = {
         section_id:  session?.sectionId,
         subject,
         title:       title.trim(),
         description: desc.trim() || null,
         due_date:    dueDate || null,
         assigned_by: session?.name || null,
-      });
+        attachments,
+      };
+      // Try with the keep-in-English keywords; if the column isn't added yet,
+      // fall back to inserting without it so homework still saves.
+      let { error } = await supabase.from("homework").insert({ ...base, audio_keywords: keywords.trim() || null });
+      if (error && /audio_keywords/i.test(error.message)) {
+        ({ error } = await supabase.from("homework").insert(base));
+      }
       if (error) { Alert.alert("Error", error.message); return; }
-      setTitle(""); setDesc(""); setDueDate(""); setShowForm(false);
+      setTitle(""); setDesc(""); setDueDate(""); setKeywords(""); setAttachments([]); setShowForm(false);
       load();
       Alert.alert("Done", "Homework assigned!");
     } catch (e: any) {
@@ -131,6 +158,23 @@ export default function TeacherHomework() {
               onChangeText={setDueDate}
               keyboardType="numbers-and-punctuation"
             />
+            <TextInput
+              style={s.formInput}
+              placeholder="Keep in English (e.g. 1 to 10, A B C) — optional"
+              placeholderTextColor={COLORS.mid}
+              value={keywords}
+              onChangeText={setKeywords}
+            />
+            <Text style={s.formHint}>
+              Comma-separate words/phrases that must NOT be translated in the audio (kept in English).
+            </Text>
+
+            <TouchableOpacity style={s.attachRow} onPress={addAttachment} activeOpacity={0.8}>
+              <Ionicons name="attach-outline" size={18} color={COLORS.primary} />
+              <Text style={s.attachRowTxt}>
+                {attachments.length ? `${attachments.length} file(s) attached — add more` : "Attach image / video (optional)"}
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[s.submitBtn, submitting && { opacity: 0.6 }]}
@@ -150,24 +194,13 @@ export default function TeacherHomework() {
             <Text style={s.emptyTxt}>No homework assigned yet</Text>
           </View>
         ) : (
-          list.map((hw: any, i: number) => (
-            <View key={hw.id || i} style={s.hwCard}>
-              <View style={s.hwTop}>
-                <View style={s.subjectBadge}>
-                  <Text style={s.subjectBadgeTxt}>{hw.subject || "General"}</Text>
-                </View>
-                {hw.dueDate && (
-                  <Text style={s.dueDate}>
-                    Due {new Date(hw.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                  </Text>
-                )}
-              </View>
-              <Text style={s.hwTitle}>{hw.title}</Text>
-              {hw.description && <Text style={s.hwDesc}>{hw.description}</Text>}
-              <Text style={s.hwMeta}>
-                Assigned {new Date(hw.createdAt || hw.assignedDate || Date.now()).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-              </Text>
-            </View>
+          list.map((hw: any) => (
+            <TeacherHomeworkCard
+              key={hw.id}
+              hw={hw}
+              statuses={statusByHw[hw.id] || []}
+              onReplied={() => load(true)}
+            />
           ))
         )}
       </ScrollView>
@@ -192,6 +225,9 @@ const s = StyleSheet.create({
   subjectTxtActive:  { color: "#fff" },
   formInput:         { backgroundColor: COLORS.bg, borderRadius: 12, padding: 14, fontSize: 14, color: COLORS.dark, borderWidth: 1, borderColor: COLORS.border, marginBottom: 12 },
   formTextarea:      { height: 80, textAlignVertical: "top" },
+  formHint:          { fontSize: 11, color: COLORS.mid, marginTop: -6, marginBottom: 12, lineHeight: 16 },
+  attachRow:         { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 10, marginBottom: 4 },
+  attachRowTxt:      { fontSize: 13, fontWeight: "600", color: COLORS.primary },
   submitBtn:         { backgroundColor: COLORS.primary, borderRadius: 12, padding: 14, alignItems: "center" },
   submitBtnTxt:      { color: "#fff", fontSize: 15, fontWeight: "700" },
   sectionTitle:      { fontSize: 13, fontWeight: "700", color: COLORS.mid, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 },
