@@ -197,6 +197,35 @@ export default function ParentHome() {
     (h: any) => h.section_id && h.section_id === activeChild?.section_id
   );
 
+  // ── Upcoming events (reuses calendarEvents the dashboard already fetched) ──
+  const nowDate  = new Date();
+  const ymd = (dt: Date) =>
+    `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+  const todayStr = ymd(nowDate);
+  const tomStr   = ymd(new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate() + 1));
+
+  const upcomingEvents: any[] = (data?.calendarEvents || [])
+    .filter((e: any) => (e.event_date || "").slice(0, 10) >= todayStr)
+    .slice(0, 4);
+
+  const EVENT_META: Record<string, { icon: string; color: string }> = {
+    holiday:  { icon: "sunny-outline",         color: COLORS.yellow },
+    festival: { icon: "sparkles-outline",      color: COLORS.secondary },
+    activity: { icon: "color-palette-outline", color: COLORS.edu },
+    exam:     { icon: "create-outline",        color: COLORS.error },
+    ptm:      { icon: "people-outline",        color: COLORS.primary },
+    sports:   { icon: "football-outline",      color: COLORS.success },
+  };
+  const eventMeta = (type: string) =>
+    EVENT_META[type] || { icon: "calendar-outline", color: COLORS.mid };
+
+  const eventDateLabel = (dateStr: string) => {
+    const d = (dateStr || "").slice(0, 10);
+    if (d === todayStr) return "Today";
+    if (d === tomStr)   return "Tomorrow";
+    return new Date(d + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+  };
+
   if (loading) return <View style={s.center}><ActivityIndicator size="large" color={COLORS.edu} /></View>;
 
   return (
@@ -331,6 +360,36 @@ export default function ParentHome() {
         </View>
       )}
 
+      {/* ── Upcoming Events ── */}
+      {upcomingEvents.length > 0 && (
+        <View style={s.section}>
+          <View style={s.sectionRowBetween}>
+            <Text style={s.sectionTitle}>Upcoming Events</Text>
+            <TouchableOpacity onPress={() => router.push("/(main)/parent/calendar" as any)}>
+              <Text style={s.viewAll}>View all →</Text>
+            </TouchableOpacity>
+          </View>
+          {upcomingEvents.map((ev: any, i: number) => {
+            const m = eventMeta(ev.event_type);
+            return (
+              <TouchableOpacity key={ev.id || i} style={s.evCard} activeOpacity={0.8}
+                onPress={() => router.push("/(main)/parent/calendar" as any)}>
+                <View style={[s.evIcon, { backgroundColor: m.color + "18" }]}>
+                  <Ionicons name={m.icon as any} size={20} color={m.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.evTitle} numberOfLines={1}>{ev.title || "Event"}</Text>
+                  {ev.event_type && <Text style={s.evType}>{String(ev.event_type).toUpperCase()}</Text>}
+                </View>
+                <View style={[s.evDateBadge, { backgroundColor: m.color + "12" }]}>
+                  <Text style={[s.evDateTxt, { color: m.color }]}>{eventDateLabel(ev.event_date)}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
       {/* ── All Activities ── */}
       <View style={s.section}>
         <Text style={s.sectionTitle}>
@@ -447,6 +506,16 @@ const s = StyleSheet.create({
   hwDue:     { fontSize: 11, color: COLORS.orange, fontWeight: "700" },
   hwMore:    { alignItems: "center", paddingVertical: 4 },
   hwMoreTxt: { fontSize: 12, color: COLORS.edu, fontWeight: "600" },
+
+  // Upcoming events
+  sectionRowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
+  viewAll:     { fontSize: 12, color: COLORS.edu, fontWeight: "700" },
+  evCard:      { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#fff", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: COLORS.border, marginBottom: 8 },
+  evIcon:      { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  evTitle:     { fontSize: 14, fontWeight: "700", color: COLORS.dark },
+  evType:      { fontSize: 10, fontWeight: "700", color: COLORS.mid, letterSpacing: 0.6, marginTop: 2 },
+  evDateBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  evDateTxt:   { fontSize: 11, fontWeight: "800" },
 
   // All Activities grid
   actGrid:        { flexDirection: "row", flexWrap: "wrap", gap: 10 },
