@@ -137,9 +137,11 @@ export async function getParentDashboard(phone: string) {
 
   const now     = new Date();
   const month   = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const [y, mo] = month.split("-").map(Number);
-  const lastDay = new Date(y, mo, 0).getDate();
-  const dateEnd = `${month}-${String(lastDay).padStart(2, "0")}`;
+  // Rolling window for upcoming calendar events: today → +45 days (was: current month only)
+  const ymd = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const todayStr  = ymd(now);
+  const windowEnd = ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 45));
 
   const [{ data: enquiries }, { data: announcements }, { data: calendarEvents }] = await Promise.all([
     supabase
@@ -156,8 +158,8 @@ export async function getParentDashboard(phone: string) {
     supabase
       .from("calendar_events")
       .select("*")
-      .gte("event_date", `${month}-01`)
-      .lte("event_date", dateEnd)
+      .gte("event_date", todayStr)
+      .lte("event_date", windowEnd)
       .order("event_date"),
   ]);
 
