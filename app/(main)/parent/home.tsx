@@ -1,9 +1,9 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   ActivityIndicator, RefreshControl, Alert, Animated, Image,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
 import { Audio } from "expo-av";
@@ -216,7 +216,7 @@ export default function ParentHome() {
   }, [activeChild?.section_id, activeChild?.name]);
 
   // Which homework this child has already marked done (for the pending count)
-  useEffect(() => {
+  const refreshHwDone = useCallback(() => {
     const cid = activeChild?.id;
     if (!cid) { setHwDoneIds({}); return; }
     supabase.from("homework_status").select("homework_id").eq("enquiry_id", cid).eq("status", "done")
@@ -226,6 +226,10 @@ export default function ParentHome() {
         setHwDoneIds(m);
       });
   }, [activeChild?.id]);
+
+  useEffect(() => { refreshHwDone(); }, [refreshHwDone]);
+  // Re-check on focus so the count updates after marking homework done on the Homework tab
+  useFocusEffect(useCallback(() => { refreshHwDone(); }, [refreshHwDone]));
 
   const activeHomework: any[] = (data?.homework || []).filter(
     (h: any) => h.section_id && h.section_id === activeChild?.section_id
