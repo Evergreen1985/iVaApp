@@ -53,3 +53,5 @@ IVAStmp-inspect2/
 
 # local dev server log
 metro.log
+apk-build.log
+*.apk
