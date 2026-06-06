@@ -63,7 +63,7 @@ export default function TeacherStudents() {
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [session?.sectionId]);
 
   const filterSections = (secs: { title: string; data: any[] }[]) => {
     if (!query) return secs;

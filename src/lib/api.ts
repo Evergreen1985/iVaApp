@@ -934,7 +934,7 @@ export async function deleteEnquiryRecord(_token: string, id: string) {
   if (!existing) throw new Error(`No enquiry found with id: ${id}`);
 
   // Delete related records — correct table names confirmed from web app
-  await supabase.from("attendance").delete().eq("enquiry_id", id);
+  await supabase.from("attendance").delete().eq("student_id", id);
   await supabase.from("fee_assignments").delete().eq("enquiry_id", id);
   await supabase.from("child_kit").delete().eq("enquiry_id", id);
   await supabase.from("child_medical").delete().eq("enquiry_id", id);

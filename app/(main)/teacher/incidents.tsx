@@ -34,7 +34,7 @@ export default function TeacherIncidents() {
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [session?.sectionId]);
 
   const handleSubmit = async () => {
     if (!childName.trim() || !desc.trim()) {

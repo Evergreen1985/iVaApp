@@ -37,7 +37,7 @@ export default function TeacherPTM() {
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [session?.sectionId]);
 
   const handleCreate = async () => {
     if (!slotDate || !startTime || !endTime) {

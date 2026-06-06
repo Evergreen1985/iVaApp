@@ -46,6 +46,7 @@ export default function TeacherLayout() {
       <Tabs.Screen name="transport"  options={{ href: null }} />
       <Tabs.Screen name="kit"        options={{ href: null }} />
       <Tabs.Screen name="ptm"        options={{ href: null }} />
+      <Tabs.Screen name="training"   options={{ href: null }} />
     </Tabs>
   );
 }

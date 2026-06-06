@@ -32,18 +32,23 @@ export default function TeacherAttendance() {
     try {
       if (session?.sectionId) {
         const todayDate = new Date().toISOString().split("T")[0];
-        const [{ data: enquiries }, { data: existing }] = await Promise.all([
-          supabase
-            .from("enquiries")
-            .select("id, child_name")
-            .eq("section_id", session.sectionId)
-            .order("child_name"),
-          supabase
+        // The attendance table has no section_id — it's keyed by student_id.
+        // Resolve the section's children first, then fetch their attendance.
+        const { data: enquiries } = await supabase
+          .from("enquiries")
+          .select("id, child_name")
+          .eq("section_id", session.sectionId)
+          .order("child_name");
+        const childIds = (enquiries || []).map((e: any) => e.id);
+        let existing: any[] = [];
+        if (childIds.length) {
+          const { data } = await supabase
             .from("attendance")
             .select("student_id, status")
-            .eq("section_id", session.sectionId)
-            .eq("date", todayDate),
-        ]);
+            .in("student_id", childIds)
+            .eq("date", todayDate);
+          existing = data || [];
+        }
         const existingMap: Record<string, Status> = {};
         (existing || []).forEach((a: any) => { existingMap[a.student_id] = a.status; });
         const list: StudentRow[] = (enquiries || []).map((e: any) => ({
@@ -58,7 +63,7 @@ export default function TeacherAttendance() {
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [session?.sectionId]);
 
   const toggle = (id: string, status: Status) => {
     setStudents((prev) => prev.map((s) => s.id === id ? { ...s, status } : s));
@@ -75,14 +80,13 @@ export default function TeacherAttendance() {
     try {
       const todayDate = new Date().toISOString().split("T")[0];
       const rows = students.map((s) => ({
-        section_id:  session?.sectionId,
         student_id:  s.id,
         date:        todayDate,
         status:      s.status,
       }));
       const { error } = await supabase
         .from("attendance")
-        .upsert(rows, { onConflict: "section_id,student_id,date" });
+        .upsert(rows, { onConflict: "student_id,date" });
       if (error) {
         Alert.alert("Error", error.message);
       } else {

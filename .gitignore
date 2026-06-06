@@ -50,3 +50,6 @@ yarn-error.*
 IVAStmp-archive/
 IVAStmp-inspect/
 IVAStmp-inspect2/
+
+# local dev server log
+metro.log

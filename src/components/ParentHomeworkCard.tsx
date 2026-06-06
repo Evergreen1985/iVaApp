@@ -4,8 +4,9 @@ import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import { COLORS } from "../lib/constants";
 import { supabase } from "../lib/supabase";
-import { pickImageOrVideo, uploadToBucket, fileKind } from "../lib/uploads";
+import { fileKind } from "../lib/uploads";
 import AudioButton from "./AudioButton";
+import Attacher from "./Attacher";
 
 const KIND_ICON: Record<string, string> = { image: "image-outline", video: "videocam-outline", pdf: "document-text-outline", file: "document-outline" };
 
@@ -52,24 +53,6 @@ export default function ParentHomeworkCard({
 
   const toggleDone = () => upsert({ status: done ? "pending" : "done" });
 
-  const attachProof = async () => {
-    const picked = await pickImageOrVideo();
-    if (!picked) return;
-    setBusy(true);
-    const url = await uploadToBucket("homework-files", `proof/${hw.id}`, picked);
-    setBusy(false);
-    if (url) upsert({ proof_file_url: url, status: "done" });
-  };
-
-  const attachDoubtFile = async () => {
-    const picked = await pickImageOrVideo();
-    if (!picked) return;
-    setBusy(true);
-    const url = await uploadToBucket("homework-files", `doubt/${hw.id}`, picked);
-    setBusy(false);
-    if (url) setDoubtFile(url);
-  };
-
   const sendDoubt = () => {
     if (!doubt.trim() && !doubtFile) { Alert.alert("Type your question", "Enter a doubt or attach a file first."); return; }
     upsert({ parent_doubt: doubt.trim() || null, doubt_file_url: doubtFile });
@@ -112,10 +95,12 @@ export default function ParentHomeworkCard({
           <Ionicons name={done ? "checkmark-circle" : "ellipse-outline"} size={18} color={done ? "#fff" : COLORS.edu} />
           <Text style={[s.statusTxt, done && { color: "#fff" }]}>{done ? "Done" : "Mark as done"}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.proofBtn} onPress={attachProof} disabled={busy} activeOpacity={0.8}>
-          <Ionicons name="cloud-upload-outline" size={15} color={COLORS.mid} />
-          <Text style={s.proofTxt}>{statusRow?.proof_file_url ? "Replace proof" : "Attach proof"}</Text>
-        </TouchableOpacity>
+        <Attacher
+          bucket="homework-files"
+          folder={`proof/${hw.id}`}
+          label={statusRow?.proof_file_url ? "Replace proof" : "Attach proof"}
+          onUploaded={(url) => upsert({ proof_file_url: url, status: "done" })}
+        />
       </View>
       {statusRow?.proof_file_url && (
         <View style={s.attRow}><Text style={s.metaLbl}>Proof: </Text><Attachment url={statusRow.proof_file_url} label="Your proof" /></View>
@@ -133,10 +118,12 @@ export default function ParentHomeworkCard({
           multiline
         />
         <View style={s.doubtActions}>
-          <TouchableOpacity style={s.attachBtn} onPress={attachDoubtFile} disabled={busy}>
-            <Ionicons name="attach-outline" size={16} color={COLORS.edu} />
-            <Text style={s.attachTxt}>{doubtFile ? "Attached ✓" : "Attach"}</Text>
-          </TouchableOpacity>
+          <Attacher
+            bucket="homework-files"
+            folder={`doubt/${hw.id}`}
+            label={doubtFile ? "Attached ✓" : "Attach"}
+            onUploaded={(url) => setDoubtFile(url)}
+          />
           <TouchableOpacity style={s.sendBtn} onPress={sendDoubt} disabled={busy}>
             {busy ? <ActivityIndicator size="small" color="#fff" /> : <Text style={s.sendTxt}>Send</Text>}
           </TouchableOpacity>

@@ -10,7 +10,8 @@ export interface Session {
   name?:     string;       // teacher / child name for parent / admin name
   token?:    string;       // teacher / admin session token
   username?: string;       // admin username
-  sectionId?: string;      // teacher's primary section
+  sectionId?: string;      // teacher's currently-selected section
+  sectionName?: string;    // teacher's currently-selected section name
   children?: any[];        // parent's children list
   loginTime: number;
 }
@@ -21,11 +22,12 @@ interface SessionStore {
   activeChild:    any | null;   // in-memory: currently selected child (not persisted)
   setActiveChild: (child: any | null) => void;
   setSession:     (s: Session) => Promise<void>;
+  setActiveSection: (sectionId: string, sectionName?: string) => Promise<void>;
   loadSession:    () => Promise<void>;
   clearSession:   () => Promise<void>;
 }
 
-export const useSession = create<SessionStore>((set) => ({
+export const useSession = create<SessionStore>((set, get) => ({
   session:     null,
   loading:     true,
   activeChild: null,
@@ -35,6 +37,15 @@ export const useSession = create<SessionStore>((set) => ({
   setSession: async (s) => {
     await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(s));
     set({ session: s });
+  },
+
+  // Teacher: switch the active section (all teacher screens read session.sectionId)
+  setActiveSection: async (sectionId, sectionName) => {
+    const cur = get().session;
+    if (!cur) return;
+    const next = { ...cur, sectionId, sectionName: sectionName ?? cur.sectionName };
+    await AsyncStorage.setItem(SESSION_KEY, JSON.stringify(next));
+    set({ session: next });
   },
 
   loadSession: async () => {

@@ -8,7 +8,7 @@ import { COLORS } from "../../../src/lib/constants";
 import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
 import { useRealtime } from "../../../src/lib/realtime";
-import { pickImageOrVideo, uploadToBucket } from "../../../src/lib/uploads";
+import Attacher from "../../../src/components/Attacher";
 import TeacherHomeworkCard from "../../../src/components/TeacherHomeworkCard";
 
 const SUBJECTS = ["English", "Hindi", "Maths", "Science", "EVS", "Drawing", "GK", "Other"];
@@ -29,13 +29,6 @@ export default function TeacherHomework() {
   const [statusByHw, setStatusByHw]   = useState<Record<string, any[]>>({});
   const [submitting, setSubmitting] = useState(false);
   const [showForm, setShowForm] = useState(false);
-
-  const addAttachment = async () => {
-    const picked = await pickImageOrVideo();
-    if (!picked) return;
-    const url = await uploadToBucket("homework-files", "teacher", picked);
-    if (url) setAttachments((a) => [...a, { url, name: picked.name, type: picked.kind }]);
-  };
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
@@ -60,7 +53,7 @@ export default function TeacherHomework() {
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [session?.sectionId]);
   useRealtime("homework", () => load());
   useRealtime("homework_status", () => load());
 
@@ -169,12 +162,14 @@ export default function TeacherHomework() {
               Comma-separate words/phrases that must NOT be translated in the audio (kept in English).
             </Text>
 
-            <TouchableOpacity style={s.attachRow} onPress={addAttachment} activeOpacity={0.8}>
-              <Ionicons name="attach-outline" size={18} color={COLORS.primary} />
-              <Text style={s.attachRowTxt}>
-                {attachments.length ? `${attachments.length} file(s) attached — add more` : "Attach image / video (optional)"}
-              </Text>
-            </TouchableOpacity>
+            <View style={s.attachRow}>
+              <Attacher
+                bucket="homework-files"
+                folder="teacher"
+                label={attachments.length ? `${attachments.length} attached — add more` : "Attach image / video / scan to PDF (optional)"}
+                onUploaded={(url, kind) => setAttachments((a) => [...a, { url, type: kind, name: `${kind} ${a.length + 1}` }])}
+              />
+            </View>
 
             <TouchableOpacity
               style={[s.submitBtn, submitting && { opacity: 0.6 }]}

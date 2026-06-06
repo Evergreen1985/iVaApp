@@ -9,6 +9,7 @@ import { COLORS } from "../../../src/lib/constants";
 import { supabase } from "../../../src/lib/supabase";
 import { useSession } from "../../../src/store/session";
 import { useRealtime } from "../../../src/lib/realtime";
+import TeacherSectionPicker from "../../../src/components/TeacherSectionPicker";
 
 export default function TeacherHome() {
   const router = useRouter();
@@ -23,16 +24,24 @@ export default function TeacherHome() {
       const sid = session?.sectionId;
       if (!sid) { setLoading(false); setRefresh(false); return; }
       const todayDate = new Date().toISOString().split("T")[0];
+      // attendance has no section_id — it's keyed by student_id. Resolve the
+      // section's children first, then count attendance by those student ids.
+      const { data: kids, count: totalStudents } = await supabase
+        .from("enquiries").select("id", { count: "exact" }).eq("section_id", sid);
+      const childIds = (kids || []).map((k: any) => k.id);
+      const attCount = (status: string) =>
+        childIds.length
+          ? supabase.from("attendance").select("id", { count: "exact", head: true })
+              .in("student_id", childIds).eq("date", todayDate).eq("status", status)
+          : Promise.resolve({ count: 0 } as any);
       const [
-        { count: totalStudents },
         { count: presentToday },
         { count: absentToday },
         { count: homeworkDue },
         { data: notices },
       ] = await Promise.all([
-        supabase.from("enquiries").select("id", { count: "exact", head: true }).eq("section_id", sid),
-        supabase.from("attendance").select("id", { count: "exact", head: true }).eq("section_id", sid).eq("date", todayDate).eq("status", "present"),
-        supabase.from("attendance").select("id", { count: "exact", head: true }).eq("section_id", sid).eq("date", todayDate).eq("status", "absent"),
+        attCount("present"),
+        attCount("absent"),
         supabase.from("homework").select("id", { count: "exact", head: true }).eq("section_id", sid).gte("due_date", todayDate),
         supabase.from("announcements").select("title,message").or("target.eq.all,target.eq.teachers").order("created_at", { ascending: false }).limit(5),
       ]);
@@ -41,14 +50,14 @@ export default function TeacherHome() {
         presentToday:  presentToday  ?? 0,
         absentToday:   absentToday   ?? 0,
         homeworkDue:   homeworkDue   ?? 0,
-        sectionName:   session?.sectionId,
+        sectionName:   session?.sectionName,
         notices:       notices || [],
       });
     } catch {}
     if (isRefresh) setRefresh(false); else setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [session?.sectionId]);
   useRealtime("attendance", () => load());
   useRealtime("homework",   () => load());
   useRealtime("enquiries",  () => load());
@@ -95,15 +104,18 @@ export default function TeacherHome() {
       </View>
 
       {/* Section info */}
-      {(session?.sectionId || data?.sectionName) && (
+      {(session?.sectionName || data?.sectionName) && (
         <View style={s.sectionCard}>
           <Ionicons name="school" size={22} color={COLORS.primary} />
           <View style={{ marginLeft: 12 }}>
-            <Text style={s.sectionLabel}>Your Section</Text>
-            <Text style={s.sectionName}>{data?.sectionName || session?.sectionId}</Text>
+            <Text style={s.sectionLabel}>Active Section</Text>
+            <Text style={s.sectionName}>{session?.sectionName || data?.sectionName}</Text>
           </View>
         </View>
       )}
+
+      {/* Section switcher (parity with web — pick any section) */}
+      <TeacherSectionPicker />
 
       {/* Stats */}
       <Text style={s.sectionTitle}>Today's Overview</Text>
@@ -125,6 +137,7 @@ export default function TeacherHome() {
           { label: "View Students",   icon: "people-outline",           tab: "students" },
           { label: "Homework",        icon: "book-outline",             tab: "homework" },
           { label: "Community",       icon: "chatbubbles-outline",      tab: "community" },
+          { label: "Training",        icon: "school-outline",           tab: "training" },
         ].map((item) => (
           <TouchableOpacity
             key={item.tab}
