@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams } from "expo-router";
 import { COLORS } from "../../../src/lib/constants";
 import { supabase } from "../../../src/lib/supabase";
+import { useSession } from "../../../src/store/session";
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -29,6 +30,7 @@ const parseYMD = (s: string): [number, number, number] | null => {
 
 export default function ParentCalendar() {
   const params = useLocalSearchParams<{ date?: string }>();
+  const { activeChild } = useSession();
   const now    = new Date();
 
   // Initial view: the date passed from Home (if any), else today
@@ -56,15 +58,21 @@ export default function ParentCalendar() {
     const end     = `${monthKey}-${String(lastDay).padStart(2, "0")}`;
     const { data } = await supabase
       .from("calendar_events")
-      .select("id,event_date,event_type,title,description")
+      .select("id,event_date,event_type,title,description,affects")
       .gte("event_date", start)
       .lte("event_date", end)
       .order("event_date");
-    setEvents(Array.isArray(data) ? data : []);
+    // Scope to this child: school-wide events + ones tagged for their section (e.g. section PTM)
+    const mySection = activeChild?.section_name;
+    const scoped = (Array.isArray(data) ? data : []).filter((e: any) => {
+      const a = (e.affects || "").trim();
+      return !a || a.toLowerCase() === "all" || a === mySection;
+    });
+    setEvents(scoped);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [year, month]);
+  useEffect(() => { load(); }, [year, month, activeChild?.section_name]);
 
   const navigate = (dir: number) => {
     const d = new Date(year, month + dir, 1);

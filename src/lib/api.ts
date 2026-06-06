@@ -175,9 +175,17 @@ export async function getParentDashboard(phone: string) {
     homework = hw || [];
   }
 
+  // Scope calendar events to this family: school-wide (affects all/empty) plus
+  // any event tagged for one of the child's sections (e.g. a section PTM).
+  const mySections = (enquiries || []).map((e: any) => e.section_name).filter(Boolean);
+  const scopedEvents = (calendarEvents || []).filter((e: any) => {
+    const a = (e.affects || "").trim();
+    return !a || a.toLowerCase() === "all" || mySections.includes(a);
+  });
+
   return {
     enquiries:      enquiries      || [],
-    calendarEvents: calendarEvents || [],
+    calendarEvents: scopedEvents,
     announcements:  announcements  || [],
     homework,
     photos: [],
@@ -277,6 +285,13 @@ export async function getClockRecord(staffName: string) {
 
 export async function getBirthdays(days = 30) {
   const res = await fetch(`${EDU_API}/api/birthdays?days=${days}`);
+  return res.json();
+}
+
+// Birthdays falling in a specific calendar month (1-12). Used for the default
+// "this month" view; pass nothing to default to the current month.
+export async function getBirthdaysMonth(month = new Date().getMonth() + 1) {
+  const res = await fetch(`${EDU_API}/api/birthdays?month=${month}`);
   return res.json();
 }
 
