@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Audio } from "expo-av";
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { COLORS } from "../../../src/lib/constants";
 import { getAudioOverviews } from "../../../src/lib/api";
 import { useSession } from "../../../src/store/session";
@@ -19,7 +19,8 @@ export default function ParentAudio() {
   const [loading, setLoading]     = useState(true);
   const [refresh, setRefresh]     = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
-  const [sound, setSound]         = useState<Audio.Sound | null>(null);
+  const player = useAudioPlayer(undefined);
+  const status = useAudioPlayerStatus(player);
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
@@ -33,29 +34,19 @@ export default function ParentAudio() {
 
   useEffect(() => {
     load();
-    return () => { sound?.unloadAsync(); };
+    return () => { try { player.remove(); } catch {} };
   }, []);
+
+  // Clear the "now playing" highlight when a clip finishes
+  useEffect(() => { if (status?.didJustFinish) setPlayingId(null); }, [status?.didJustFinish]);
 
   const handlePlay = async (item: any) => {
     try {
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-        if (playingId === item.id) { setPlayingId(null); return; }
-      }
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: item.audio_url || item.url || item.audioUrl },
-        { shouldPlay: true }
-      );
-      setSound(newSound);
+      if (playingId === item.id) { player.pause(); setPlayingId(null); return; }
+      await setAudioModeAsync({ playsInSilentMode: true });
+      player.replace({ uri: item.audio_url || item.url || item.audioUrl });
+      player.play();
       setPlayingId(item.id);
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setPlayingId(null);
-          setSound(null);
-        }
-      });
     } catch {
       Alert.alert("Error", "Could not play this audio.");
     }

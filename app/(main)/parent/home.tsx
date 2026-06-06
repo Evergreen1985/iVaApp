@@ -6,7 +6,7 @@ import {
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTranslation } from "react-i18next";
-import { Audio } from "expo-av";
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { COLORS } from "../../../src/lib/constants";
 import { supabase } from "../../../src/lib/supabase";
 import { getParentDashboard, getAudioOverviews } from "../../../src/lib/api";
@@ -65,9 +65,10 @@ export default function ParentHome() {
   const [annLimit, setAnnLimit]           = useState(10);
   const [hwDoneIds, setHwDoneIds]         = useState<Record<string, boolean>>({});
 
-  // Ref so cleanup/logout always holds the live sound, never stale null
-  const soundRef    = useRef<Audio.Sound | null>(null);
-  const loadingRef  = useRef(false);   // prevents concurrent createAsync on rapid taps
+  // expo-audio player (expo-av was removed in SDK 56)
+  const player      = useAudioPlayer(undefined);
+  const audioStatus = useAudioPlayerStatus(player);
+  const loadingRef  = useRef(false);   // prevents concurrent loads on rapid taps
   const mountedLang = useRef(lang);    // skip re-fetch on first render of lang effect
 
   // Community bubble
@@ -77,12 +78,12 @@ export default function ParentHome() {
   const bubbleSubRef = useRef<any>(null);
 
   const stopSound = async () => {
-    if (soundRef.current) {
-      try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch {}
-      soundRef.current = null;
-    }
+    try { player.pause(); await player.seekTo(0); } catch {}
     setPlayingId(null);
   };
+
+  // Clear the "now playing" highlight when a clip finishes
+  useEffect(() => { if (audioStatus?.didJustFinish) setPlayingId(null); }, [audioStatus?.didJustFinish]);
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
@@ -176,19 +177,10 @@ export default function ParentHome() {
       await stopSound();
       if (wasPlaying) return;                   // tap same card = pause/stop
 
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: item.audio_url || item.url || item.audioUrl },
-        { shouldPlay: true }
-      );
-      soundRef.current = sound;
+      await setAudioModeAsync({ playsInSilentMode: true });
+      player.replace({ uri: item.audio_url || item.url || item.audioUrl });
+      player.play();
       setPlayingId(item.id);
-      sound.setOnPlaybackStatusUpdate(status => {
-        if (status.isLoaded && status.didJustFinish) {
-          soundRef.current = null;
-          setPlayingId(null);
-        }
-      });
     } catch { Alert.alert("Error", "Could not play this audio."); }
     finally { loadingRef.current = false; }
   };

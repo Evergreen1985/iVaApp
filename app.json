@@ -19,7 +19,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "ai.intelliverify.iva",
-      "versionCode": 6,
+      "versionCode": 7,
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
@@ -61,7 +61,9 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

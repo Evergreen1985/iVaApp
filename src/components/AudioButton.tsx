@@ -3,21 +3,22 @@ import {
   View, TouchableOpacity, Text, ActivityIndicator, StyleSheet, Alert, PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from "expo-audio";
 import { useTranslation } from "react-i18next";
 import { COLORS } from "../lib/constants";
 import { getItemAudio } from "../lib/api";
 
-const fmt = (ms: number) => {
-  if (!ms || ms < 0) return "0:00";
-  const s = Math.floor(ms / 1000);
+// expo-audio reports time in SECONDS (expo-av used milliseconds).
+const fmt = (sec: number) => {
+  if (!sec || sec < 0) return "0:00";
+  const s = Math.floor(sec);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
 
 /**
  * "Listen" → fetches/generates audio in the parent's language, then shows a mini
  * player with a progress bar, time, and a draggable seek (tap or drag to repeat a part).
- * Pure JS (PanResponder + expo-av) so it works without a native rebuild.
+ * Uses expo-audio (expo-av was removed in SDK 56).
  */
 export default function AudioButton({
   sourceType = "custom", sourceId = "", title, content = "", keepEnglish, directUrl, onStart,
@@ -31,44 +32,42 @@ export default function AudioButton({
   onStart?: () => void;        // fired when playback begins (e.g. to mark "seen")
 }) {
   const { i18n } = useTranslation();
-  const [state, setState]     = useState<"idle" | "loading" | "active">("idle");
-  const [isPlaying, setPlay]  = useState(false);
-  const [pos, setPos]         = useState(0);
-  const [dur, setDur]         = useState(0);
+  const player = useAudioPlayer(undefined, { updateInterval: 250 });
+  const status = useAudioPlayerStatus(player);
 
-  const soundRef   = useRef<Audio.Sound | null>(null);
+  const [state, setState]   = useState<"idle" | "loading" | "active">("idle");
+  const [dragPos, setDrag]  = useState<number | null>(null); // seconds, while dragging
   const mountedRef = useRef(true);
-  const durRef     = useRef(0);     // live duration for gesture handlers (avoids stale closure)
+  const durRef     = useRef(0);     // live duration (seconds) for gesture handlers
   const trackW     = useRef(0);     // measured seek-track width
-  const seekingRef = useRef(false); // pause position updates while dragging
+  const seekingRef = useRef(false); // ignore status position while dragging
 
   useEffect(() => {
     mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (soundRef.current) { soundRef.current.unloadAsync().catch(() => {}); soundRef.current = null; }
-    };
+    return () => { mountedRef.current = false; try { player.remove(); } catch {} };
   }, []);
 
-  const onStatus = (st: any) => {
-    if (!st?.isLoaded) return;
-    if (st.durationMillis) { durRef.current = st.durationMillis; setDur(st.durationMillis); }
-    if (!seekingRef.current) setPos(st.positionMillis || 0);
-    setPlay(!!st.isPlaying);
-    if (st.didJustFinish) { setPlay(false); setPos(0); soundRef.current?.setPositionAsync(0).catch(() => {}); }
-  };
+  if (status?.duration) durRef.current = status.duration;
+  const dur     = durRef.current;
+  const playing = !!status?.playing;
+  const pos     = seekingRef.current && dragPos != null ? dragPos : (status?.currentTime || 0);
+
+  // Reset to start when playback finishes
+  useEffect(() => {
+    if (status?.didJustFinish) { player.seekTo(0).catch(() => {}); player.pause(); }
+  }, [status?.didJustFinish]);
 
   const fracFromX = (x: number) => Math.max(0, Math.min(1, x / (trackW.current || 1)));
 
   const pan = useRef(PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (e) => { seekingRef.current = true; setPos(fracFromX(e.nativeEvent.locationX) * durRef.current); },
-    onPanResponderMove:  (e) => { setPos(fracFromX(e.nativeEvent.locationX) * durRef.current); },
+    onPanResponderGrant: (e) => { seekingRef.current = true; setDrag(fracFromX(e.nativeEvent.locationX) * durRef.current); },
+    onPanResponderMove:  (e) => { setDrag(fracFromX(e.nativeEvent.locationX) * durRef.current); },
     onPanResponderRelease: async (e) => {
-      const ms = fracFromX(e.nativeEvent.locationX) * durRef.current;
-      try { await soundRef.current?.setPositionAsync(ms); } catch {}
-      setPos(ms); seekingRef.current = false;
+      const sec = fracFromX(e.nativeEvent.locationX) * durRef.current;
+      try { await player.seekTo(sec); } catch {}
+      setDrag(sec); seekingRef.current = false;
     },
     onPanResponderTerminate: () => { seekingRef.current = false; },
   })).current;
@@ -91,14 +90,9 @@ export default function AudioButton({
       }
       if (!mountedRef.current) return;
       if (url) {
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: url },
-          { shouldPlay: true, progressUpdateIntervalMillis: 250 },
-          onStatus,
-        );
-        if (!mountedRef.current) { sound.unloadAsync().catch(() => {}); return; }
-        soundRef.current = sound;
+        await setAudioModeAsync({ playsInSilentMode: true });
+        player.replace({ uri: url });
+        player.play();
         setState("active");
         onStart?.();
       } else {
@@ -113,15 +107,14 @@ export default function AudioButton({
     }
   };
 
-  const togglePlay = async () => {
-    const s = soundRef.current; if (!s) return;
-    if (isPlaying) { await s.pauseAsync(); }
-    else { if (durRef.current && pos >= durRef.current - 250) await s.setPositionAsync(0); await s.playAsync(); }
+  const togglePlay = () => {
+    if (playing) { player.pause(); }
+    else { if (durRef.current && pos >= durRef.current - 0.25) player.seekTo(0).catch(() => {}); player.play(); }
   };
 
-  const close = async () => {
-    if (soundRef.current) { try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch {} soundRef.current = null; }
-    if (mountedRef.current) { setState("idle"); setPlay(false); setPos(0); setDur(0); }
+  const close = () => {
+    try { player.pause(); player.seekTo(0).catch(() => {}); } catch {}
+    setState("idle"); setDrag(null);
   };
 
   // ── idle / loading: the Listen pill ──
@@ -142,7 +135,7 @@ export default function AudioButton({
   return (
     <View style={s.player}>
       <TouchableOpacity style={s.playBtn} onPress={togglePlay} activeOpacity={0.85}>
-        <Ionicons name={isPlaying ? "pause" : "play"} size={16} color="#fff" />
+        <Ionicons name={playing ? "pause" : "play"} size={16} color="#fff" />
       </TouchableOpacity>
 
       <View style={s.trackWrap} onLayout={(e) => { trackW.current = e.nativeEvent.layout.width; }} {...pan.panHandlers}>

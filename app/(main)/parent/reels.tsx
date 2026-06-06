@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Video, ResizeMode } from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS, EDU_API } from "../../../src/lib/constants";
 import { useSession } from "../../../src/store/session";
@@ -97,6 +97,12 @@ export default function ParentReels() {
   const [generating, setGenerating] = useState(false);
   const [videoUrl, setVideoUrl]     = useState("");
   const [videoDur, setVideoDur]     = useState(0);
+
+  // expo-video player (expo-av removed in SDK 56). Loads the generated reel when ready.
+  const videoPlayer = useVideoPlayer(null, (p) => { p.loop = true; });
+  useEffect(() => {
+    if (videoUrl) { try { videoPlayer.replace({ uri: videoUrl }); videoPlayer.play(); } catch {} }
+  }, [videoUrl]);
 
   const spinVal  = useRef(new Animated.Value(0)).current;
   const spinLoop = useRef<Animated.CompositeAnimation | null>(null);
@@ -380,8 +386,8 @@ export default function ParentReels() {
         {selected.length} photos · {videoDur}s · Evergreen Preschool watermark
       </Text>
 
-      <Video
-        source={{ uri: videoUrl }}
+      <VideoView
+        player={videoPlayer}
         style={{
           width: SW - 40,
           height: Math.min(Math.round((SW - 40) * 16 / 9), 520),
@@ -389,10 +395,8 @@ export default function ParentReels() {
           marginTop: 20,
           backgroundColor: "#000",
         }}
-        useNativeControls
-        resizeMode={ResizeMode.CONTAIN}
-        shouldPlay
-        isLooping
+        contentFit="contain"
+        nativeControls
       />
 
       <View style={{ flexDirection: "row", gap: 12, marginTop: 20, width: "100%" }}>
