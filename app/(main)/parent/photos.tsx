@@ -17,6 +17,7 @@ type Photo = {
   title: string | null;
   section_name: string | null;
   uploaded_at: string;
+  ai_tags?: string | null;
 };
 
 export default function ParentPhotos() {
@@ -34,7 +35,7 @@ export default function ParentPhotos() {
     try {
       const { data } = await supabase
         .from("section_photos")
-        .select("id, photo_url, title, section_name, uploaded_at")
+        .select("id, photo_url, title, section_name, uploaded_at, ai_tags")
         .order("uploaded_at", { ascending: false })
         .limit(200);
       const list: Photo[] = data || [];
@@ -155,6 +156,12 @@ export default function ParentPhotos() {
                   {preview.section_name ? `${preview.section_name} · ` : ""}
                   {new Date(preview.uploaded_at).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
                 </Text>
+                {(() => {
+                  let tags: any[] = [];
+                  try { tags = preview.ai_tags ? (typeof preview.ai_tags === "string" ? JSON.parse(preview.ai_tags) : preview.ai_tags) : []; } catch {}
+                  const nm = tags.filter((f: any) => f.childName).map((f: any) => f.childName);
+                  return nm.length > 0 ? <Text style={s.modalSub}>🏷 {nm.join(", ")}</Text> : null;
+                })()}
               </View>
             </>
           )}

@@ -6,6 +6,8 @@ import { useRouter } from "expo-router";
 import { COLORS } from "../../src/lib/constants";
 import { getAdminPhotos } from "../../src/lib/api";
 import { useSession } from "../../src/store/session";
+import { supabase } from "../../src/lib/supabase";
+import FaceAutoTagger from "../../src/components/FaceAutoTagger";
 
 const { width } = Dimensions.get("window");
 const IMG_SIZE = (width - 48) / 3;
@@ -21,6 +23,13 @@ export default function AdminPhotos() {
   const [refresh, setRefresh]   = useState(false);
   const [cat, setCat]           = useState("all");
   const [preview, setPreview]   = useState<any>(null);
+  const [kids, setKids]         = useState<any[]>([]);
+
+  // All children with profile photos — reference faces for auto-tagging
+  useEffect(() => {
+    supabase.from("enquiries").select("id, child_name, photo_url").not("photo_url", "is", null)
+      .then(({ data }) => setKids(data || []));
+  }, []);
 
   const load = async (isRefresh = false) => {
     if (isRefresh) setRefresh(true); else setLoading(true);
@@ -80,7 +89,7 @@ export default function AdminPhotos() {
 
       <Modal visible={!!preview} transparent animationType="fade" onRequestClose={() => setPreview(null)}>
         <Pressable style={s.overlay} onPress={() => setPreview(null)}>
-          <View style={s.previewBox}>
+          <Pressable style={s.previewBox} onPress={() => {}}>
             {preview?.url || preview?.photo_url ? (
               <Image source={{ uri: preview.url || preview.photo_url }}
                 style={s.previewImg} resizeMode="contain" />
@@ -95,8 +104,15 @@ export default function AdminPhotos() {
               {preview?.created_at && (
                 <Text style={s.previewMeta}>{new Date(preview.created_at).toLocaleDateString("en-IN")}</Text>
               )}
+              {(preview?.id && (preview?.photo_url || preview?.url)) && (
+                <FaceAutoTagger
+                  photo={{ ...preview, photo_url: preview.photo_url || preview.url }}
+                  children={kids}
+                  onSaved={() => load(true)}
+                />
+              )}
             </View>
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </View>

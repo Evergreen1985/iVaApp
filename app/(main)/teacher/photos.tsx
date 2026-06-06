@@ -10,6 +10,7 @@ import { supabase } from "../../../src/lib/supabase";
 import { EDU_API } from "../../../src/lib/constants";
 import { useSession } from "../../../src/store/session";
 import { useRealtime } from "../../../src/lib/realtime";
+import FaceAutoTagger from "../../../src/components/FaceAutoTagger";
 
 export default function TeacherPhotos() {
   const { session } = useSession();
@@ -17,6 +18,7 @@ export default function TeacherPhotos() {
   const sectionName = session?.sectionId || "";
 
   const [photos, setPhotos]           = useState<any[]>([]);
+  const [kids, setKids]               = useState<any[]>([]);
   const [loading, setLoading]         = useState(true);
   const [refresh, setRefresh]         = useState(false);
   const [uploading, setUploading]     = useState(false);
@@ -36,6 +38,13 @@ export default function TeacherPhotos() {
 
   useEffect(() => { if (sectionId) loadPhotos(); else setLoading(false); }, [sectionId]);
   useRealtime("section_photos", () => loadPhotos());
+
+  // Children (with profile photos) used as the reference faces for auto-tagging
+  useEffect(() => {
+    if (!sectionId) return;
+    supabase.from("enquiries").select("id, child_name, photo_url").eq("section_id", sectionId)
+      .then(({ data }) => setKids(data || []));
+  }, [sectionId]);
 
   const handleUpload = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -154,6 +163,9 @@ export default function TeacherPhotos() {
               <Text style={s.photoDate}>
                 {new Date(p.uploaded_at || Date.now()).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
               </Text>
+              <View style={{ paddingHorizontal: 8, paddingBottom: 8 }}>
+                <FaceAutoTagger photo={p} children={kids} onSaved={() => loadPhotos(true)} />
+              </View>
             </View>
           ))}
         </View>
