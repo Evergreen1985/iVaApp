@@ -130,10 +130,14 @@ export default function LoginScreen() {
     if (data.error) { Alert.alert(t("loginFailed"), data.error); return; }
     await setSession({
       role: "teacher", name: data.name || user,
-      token: data.token, sectionId: data.sectionId,
+      token: data.token, sectionId: data.sectionId, sectionName: data.sectionName,
+      staffRole: data.role,
       loginTime: Date.now(),
     });
-    router.replace("/(main)/teacher/home");
+    // Transport staff (drivers/helpers) use the app to share the bus location daily —
+    // send them straight to the Transport screen instead of the teacher dashboard.
+    const transportStaff = ["Driver", "Helper"].includes(String(data.role || ""));
+    router.replace(transportStaff ? "/(main)/teacher/transport" : "/(main)/teacher/home");
   };
 
   // ── Owner login ─────────────────────────────────────────────────────────

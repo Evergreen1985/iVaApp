@@ -12,6 +12,7 @@ export interface Session {
   username?: string;       // admin username
   sectionId?: string;      // teacher's currently-selected section
   sectionName?: string;    // teacher's currently-selected section name
+  staffRole?: string;      // real HR role from teacher_accounts (Teacher / Driver / Helper / Coordinator)
   children?: any[];        // parent's children list
   loginTime: number;
 }
