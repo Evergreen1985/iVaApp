@@ -55,6 +55,7 @@ const GROUPS: Group[] = [
     title: "Content & Media",
     items: [
       { label: "Photos",         icon: "images-outline",  route: "/(admin)/photos",      color: "#0891B2" },
+      { label: "Reels",          icon: "film-outline",    route: "/(admin)/reels",       color: "#0891B2" },
       { label: "Audio Overviews",icon: "mic-outline",     route: "/(admin)/audio",       color: "#0891B2" },
       { label: "Knowledge Base", icon: "library-outline", route: "/(admin)/kb",          color: "#0891B2" },
       { label: "Referrals",      icon: "share-outline",   route: "/(admin)/referrals",   color: "#0891B2" },

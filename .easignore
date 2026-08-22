@@ -8,3 +8,12 @@ IVAStmp*/
 /android
 /ios
 *.keystore
+
+# Build artifacts, local test builds, screenshots and CLI logs — not needed
+# for the EAS build and were bloating the upload archive (~178 MB).
+*.apk
+*.aab
+/*.png
+*.log
+eas-list.json
+eas-view.json

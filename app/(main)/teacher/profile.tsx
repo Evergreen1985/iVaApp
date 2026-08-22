@@ -35,6 +35,7 @@ export default function TeacherProfile() {
     { label: t("homework"),   icon: "book-outline",             route: "/(main)/teacher/homework" },
     { label: t("students"),   icon: "people-outline",           route: "/(main)/teacher/students" },
     { label: t("photos"),     icon: "images-outline",           route: "/(main)/teacher/photos" },
+    { label: t("reels"),      icon: "film-outline",             route: "/(main)/teacher/reels" },
     { label: t("kitBooks"),   icon: "bag-outline",              route: "/(main)/teacher/kit" },
     { label: t("messages"),   icon: "chatbubble-outline",       route: "/(main)/teacher/messages" },
     { label: t("transport"),  icon: "bus-outline",              route: "/(main)/teacher/transport" },

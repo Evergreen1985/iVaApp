@@ -52,6 +52,7 @@ export default function TeacherLayout() {
       <Tabs.Screen name="birthdays"  options={{ href: null }} />
       <Tabs.Screen name="incidents"  options={{ href: null }} />
       <Tabs.Screen name="photos"     options={{ href: null }} />
+      <Tabs.Screen name="reels"      options={{ href: null }} />
       <Tabs.Screen name="kit"        options={{ href: null }} />
       <Tabs.Screen name="ptm"        options={{ href: null }} />
       <Tabs.Screen name="training"   options={{ href: null }} />

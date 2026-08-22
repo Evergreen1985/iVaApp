@@ -1,28 +1,30 @@
-# iVa — Google Play Release Checklist
+# iVa Edu — Google Play Release Checklist
 
-App: **iVa** · Package: **`ai.intelliverify.iva`** · EAS project: `@intelliverify/iva-intelliverify`
+App: **iVa Edu** · Package: **`ai.intelliverify.ivaedu`** · EAS project: `@intelliverify/iva-intelliverify`
+
+> ⚠️ **New app / new package.** `ai.intelliverify.ivaedu` is a **brand-new Play listing**, separate from the original `ai.intelliverify.iva`. A published package name can never be changed, so this does **not** update the old app — it's its own app with its own installs, reviews, and signing key.
 
 ---
 
 ## 0. Prerequisites
 - [ ] **Google Play Developer account** active ($25 one-time) under the right Google account.
 - [ ] Decide release track: **Internal testing → Closed → Production** (recommended ramp). Internal testing goes live to testers in minutes with no review wait — best first step.
-- [ ] AAB built by EAS with the **EAS keystore (`cl6jUHZH4D`)** — done via `eas build -p android --profile production`.
+- [x] AAB built by EAS via `eas build -p android --profile production`. A **new upload keystore was auto-generated** for `ai.intelliverify.ivaedu` (the old `iva` key `cl6jUHZH4D` is **not** reused). View it anytime with `eas credentials -p android`.
+  - Latest build: `iVaEdu-v1.0.1-code1-production.aab` — versionCode **1**, EAS build `37a60d5c-6327-42f0-9bb2-2beb20cf0808`.
 
 ## 1. Create / open the app in Play Console
-- [ ] Play Console → **Create app** (if first time):
-  - App name: **iVa**
+- [ ] Play Console → **Create app** (this is a first-time listing for `ivaedu`):
+  - App name: **iVa Edu**
   - Default language, App (not Game), **Free**
   - Confirm declarations (Play policies, US export laws)
-- [ ] If the app already exists, just open it and skip to step 4.
 
 ## 2. versionCode sanity check
-- [ ] Play **rejects any `versionCode` already used**. This build = **versionCode 4**.
-- [ ] If build 4 (or higher) was uploaded before → bump `versionCode` in `app.json` and rebuild.
+- [ ] Play **rejects any `versionCode` already used** *within this app*. Since `ivaedu` is brand new, this build = **versionCode 1** and is fine to upload.
+- [ ] For each subsequent release, bump `versionCode` in `app.json` (2, 3, …) and rebuild.
 
 ## 3. Upload the AAB
 - [ ] Track (e.g. **Internal testing**) → **Create new release**.
-- [ ] Upload the `.aab` from the EAS build page (Build Artifacts URL).
+- [ ] Upload the `.aab` — either the local file `~/Downloads/iVaEdu-v1.0.1-code1-production.aab` or from the EAS build page (Build Artifacts URL).
 - [ ] Let **Play App Signing** manage the app signing key (accept on first upload). Your EAS key becomes the *upload* key.
 - [ ] Add release notes → **Save** → **Review release** → **Roll out**.
 

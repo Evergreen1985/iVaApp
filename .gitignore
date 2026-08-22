@@ -21,6 +21,10 @@ expo-env.d.ts
 # Google Play service-account key (NEVER commit)
 google-play-key.json
 
+# EAS local credentials (plaintext keystore passwords — NEVER commit)
+credentials.json
+credentials/
+
 # Metro
 .metro-health-check*
 
@@ -55,3 +59,17 @@ IVAStmp-inspect2/
 metro.log
 apk-build.log
 *.apk
+
+# EAS command output logs / json dumps
+eas-build.log
+eas-list.json
+eas-view.json
+
+# local screenshots / scratch captures (repo root only)
+/ft*.png
+/g*.png
+/qa*.png
+/qe*.png
+/qm*.png
+/qr*.png
+/rc*.png

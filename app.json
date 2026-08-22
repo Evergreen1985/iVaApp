@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "iVa",
+    "name": "iVa Edu",
     "slug": "iva-intelliverify",
     "owner": "intelliverify",
     "version": "1.0.1",
@@ -18,8 +18,8 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "ai.intelliverify.iva",
-      "versionCode": 10,
+      "package": "ai.intelliverify.ivaedu",
+      "versionCode": 2,
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
