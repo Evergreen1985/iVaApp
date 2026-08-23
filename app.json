@@ -19,7 +19,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "ai.intelliverify.ivaedu",
-      "versionCode": 2,
+      "versionCode": 3,
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE",
@@ -63,6 +63,7 @@
       ],
       "expo-audio",
       "expo-video",
+      "./plugins/withoutMediaPlayback",
       "./plugins/withArm64Only"
     ],
     "experiments": {

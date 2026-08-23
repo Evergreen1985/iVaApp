@@ -2,13 +2,16 @@ import { useEffect, useState, useRef } from "react";
 import {
   View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator,
-  Pressable, BackHandler,
+  Pressable, BackHandler, Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSession } from "../../../src/store/session";
 import { supabase } from "../../../src/lib/supabase";
 import { COLORS, EDU_API } from "../../../src/lib/constants";
+
+const BLOCKED_KEY = "community_blocked";
 
 const EMOJIS = ["❤️","😂","😮","😢","👏","🔥","🎉","👍","✅","😍","🙏","✨"];
 
@@ -48,6 +51,7 @@ export default function TeacherCommunity() {
   const [chatLoading, setChatLoading]     = useState(false);
   const [listLoading, setListLoading]     = useState(true);
   const [reactingTo, setReactingTo]       = useState<string | null>(null);
+  const [blocked, setBlocked]             = useState<Set<string>>(new Set());
 
   const subRef        = useRef<any>(null);
   const listRef       = useRef<FlatList>(null);
@@ -72,6 +76,13 @@ export default function TeacherCommunity() {
   }, []);
 
   useEffect(() => () => cleanupSub(), []);
+
+  // Load the device's blocked-users list
+  useEffect(() => {
+    AsyncStorage.getItem(BLOCKED_KEY)
+      .then(v => { if (v) setBlocked(new Set(JSON.parse(v))); })
+      .catch(() => {});
+  }, []);
 
   const cleanupSub = () => {
     if (subRef.current) { supabase.removeChannel(subRef.current); subRef.current = null; }
@@ -177,6 +188,59 @@ export default function TeacherCommunity() {
     }).catch(() => {});
   };
 
+  // ── Moderation: block (device-side) + report (to school admin) ───────────
+  const persistBlocked = async (nx: Set<string>) => {
+    setBlocked(nx);
+    try { await AsyncStorage.setItem(BLOCKED_KEY, JSON.stringify([...nx])); } catch {}
+  };
+
+  const blockUser = (memberId: string, name: string) => {
+    setReactingTo(null);
+    Alert.alert(
+      `Block ${name}?`,
+      "You will no longer see messages from this person in the community. You can unblock them later.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Block", style: "destructive", onPress: () => {
+            const nx = new Set(blocked); nx.add(memberId); persistBlocked(nx);
+          } },
+      ],
+    );
+  };
+
+  const unblockAll = () => {
+    Alert.alert("Unblock everyone?", "Show messages from all blocked people again?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Unblock all", onPress: () => persistBlocked(new Set()) },
+    ]);
+  };
+
+  const reportMessage = (msg: Message) => {
+    setReactingTo(null);
+    Alert.alert(
+      "Report message",
+      "Report this message to the school admin for review?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Report", style: "destructive", onPress: async () => {
+            try {
+              await supabase.from("community_reports").insert({
+                message_id:         msg.id,
+                channel_id:         activeChannel?.id ?? null,
+                reported_member_id: msg.member_id,
+                reported_name:      msg.display_name,
+                reported_content:   msg.content,
+                reporter_type:      "teacher",
+                reporter_ref:       session?.name || "",
+                reporter_name:      session?.name || "Teacher",
+              });
+            } catch {}
+            Alert.alert("Reported", "Thank you. This message has been sent to the school admin for review.");
+          } },
+      ],
+    );
+  };
+
   const renderMessage = ({ item: msg }: { item: Message }) => {
     const mine       = msg.member_id === memberId;
     const showPicker = reactingTo === msg.id;
@@ -216,6 +280,18 @@ export default function TeacherCommunity() {
                 <Text style={s.emojiTxt}>{e}</Text>
               </TouchableOpacity>
             ))}
+            {!mine && (
+              <View style={s.modRow}>
+                <TouchableOpacity style={s.modBtn} onPress={() => reportMessage(msg)}>
+                  <Ionicons name="flag-outline" size={14} color={COLORS.error} />
+                  <Text style={s.modBtnTxt}>Report</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.modBtn} onPress={() => blockUser(msg.member_id, msg.display_name)}>
+                  <Ionicons name="ban-outline" size={14} color={COLORS.error} />
+                  <Text style={s.modBtnTxt}>Block</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -277,6 +353,12 @@ export default function TeacherCommunity() {
           <Text style={s.hdrTitle}>{activeChannel.name}</Text>
           {!!activeChannel.description && <Text style={s.hdrSub} numberOfLines={1}>{activeChannel.description}</Text>}
         </View>
+        {blocked.size > 0 && (
+          <TouchableOpacity onPress={unblockAll} style={s.unblockBtn}>
+            <Ionicons name="ban" size={12} color={COLORS.error} />
+            <Text style={s.unblockTxt}>Unblock {blocked.size}</Text>
+          </TouchableOpacity>
+        )}
         <View style={[s.chIconBox, { width: 38, height: 38, borderRadius: 12 }]}>
           <Ionicons name={slugIcon(activeChannel.slug) as any} size={18} color={COLORS.primary} />
         </View>
@@ -286,7 +368,7 @@ export default function TeacherCommunity() {
       ) : (
         <FlatList
           ref={listRef}
-          data={messages}
+          data={messages.filter(m => !blocked.has(m.member_id))}
           keyExtractor={m => m.id}
           contentContainerStyle={{ padding: 14, paddingBottom: 20 }}
           renderItem={renderMessage}
@@ -354,6 +436,11 @@ const s = StyleSheet.create({
   emojiPickerMine: { marginLeft: 0, marginRight: 42, alignSelf: "flex-end" },
   emojiBtn:        { padding: 5 },
   emojiTxt:        { fontSize: 20 },
+  modRow:          { flexDirection: "row", gap: 8, width: "100%", marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: COLORS.border },
+  modBtn:          { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: COLORS.error + "55", backgroundColor: COLORS.error + "10" },
+  modBtnTxt:       { fontSize: 12, fontWeight: "700", color: COLORS.error },
+  unblockBtn:      { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 12, backgroundColor: COLORS.error + "12" },
+  unblockTxt:      { fontSize: 11, fontWeight: "700", color: COLORS.error },
   emptyTxt: { fontSize: 14, color: COLORS.mid, textAlign: "center", lineHeight: 22 },
   composer:    { flexDirection: "row", alignItems: "flex-end", paddingHorizontal: 12, paddingTop: 10, gap: 10, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: COLORS.border },
   compInput:   { flex: 1, backgroundColor: COLORS.bg, borderRadius: 22, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 10, fontSize: 14, color: COLORS.dark, maxHeight: 100, borderWidth: 1, borderColor: COLORS.border },
