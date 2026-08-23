@@ -47,10 +47,7 @@ export default function TeacherPhotos() {
   }, [sectionId]);
 
   const handleUpload = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission required", "Please allow access to your photos."); return;
-    }
+    // Uses the Android Photo Picker / iOS picker — no media-library permission needed.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.75,

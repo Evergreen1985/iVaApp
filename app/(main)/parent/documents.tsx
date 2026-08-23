@@ -41,11 +41,7 @@ export default function ParentDocuments() {
   useEffect(() => { load(); }, []);
 
   const handleUpload = async (docType: string) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Permission Required", "Please allow access to your photos to upload documents.");
-      return;
-    }
+    // Uses the Android Photo Picker / iOS picker — no media-library permission needed.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ["images"],
       quality: 0.8,

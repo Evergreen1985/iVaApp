@@ -46,11 +46,7 @@ export async function uploadBytes(bucket: string, folder: string, bytes: Uint8Ar
 // Pick an image OR video from the library. (PDF/doc support needs expo-document-picker,
 // which is a native module — added in the next app build.)
 export async function pickImageOrVideo(): Promise<Picked | null> {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== "granted") {
-    Alert.alert("Permission required", "Please allow access to your photos & videos.");
-    return null;
-  }
+  // Uses the Android Photo Picker / iOS picker — no media-library permission needed.
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ImagePicker.MediaTypeOptions.All, // images + videos
     quality: 0.7,

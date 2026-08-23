@@ -11,6 +11,10 @@ const { withAndroidManifest } = require('@expo/config-plugins');
 const REMOVE_PERMS = [
   'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
   'android.permission.RECORD_AUDIO',
+  // expo-image-picker auto-adds this, but launchImageLibraryAsync uses the
+  // Android Photo Picker (no permission needed). Removing it avoids Google's
+  // restricted photo/video permission declaration.
+  'android.permission.READ_MEDIA_IMAGES',
 ];
 const SERVICE = 'expo.modules.audio.service.AudioControlsService';
 
